@@ -12,7 +12,7 @@
     "moduleResolution": "node",
     "ignoreDeprecations": "6.0",
     "noImplicitAny": false,
-    "types": ["node"]
+    "noEmitOnError": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
