@@ -9,8 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
-
+    "moduleResolution": "node10",
     "noImplicitAny": false,
     "noEmitOnError": false
   },
