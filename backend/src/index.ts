@@ -27,6 +27,7 @@ app.use(cors({
     'http://localhost:3000',
     MINI_APP_URL,
     'https://stellular-haupia-9bddae.netlify.app',
+    'https://list-frontend.onrender.com',
   ],
   credentials: true,
 }));

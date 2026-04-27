@@ -18,4 +18,4 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: MINI_APP_URL
-        value: https://list-frontend.onrender.com
+        value: https://stellular-haupia-9bddae.netlify.app
