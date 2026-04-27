@@ -1,32 +1,41 @@
 import { useState, useEffect } from 'react';
 import { motion, useSpring, useTransform } from 'framer-motion';
-import { Zap, ArrowUpRight, ArrowDownLeft, Vote, Award, BookOpen, Target } from 'lucide-react';
+import { Zap, ArrowUpRight, ArrowDownLeft, Vote, Award, BookOpen, Target, ChevronRight } from 'lucide-react';
 import { litApi, type LitTransaction } from '../api/client';
-import { useAuthStore } from '../store';
+import { useAuthStore, useUIStore } from '../store';
 
 const TX_ICONS: Record<string, { icon: typeof Zap; color: string; bg: string }> = {
-  goal_reward:         { icon: Target,      color: 'var(--green)',  bg: 'rgba(48,209,88,0.12)' },
-  watch_reward:        { icon: Award,       color: '#818cf8',       bg: 'rgba(99,102,241,0.12)' },
-  vote_bonus:          { icon: Vote,        color: 'var(--accent)', bg: 'rgba(99,102,241,0.12)' },
-  stake_win:           { icon: ArrowUpRight, color: 'var(--green)', bg: 'rgba(48,209,88,0.12)' },
-  stake_loss:          { icon: ArrowDownLeft, color: 'var(--red)',  bg: 'rgba(255,69,58,0.12)' },
-  teacher_payment:     { icon: BookOpen,    color: 'var(--yellow)', bg: 'rgba(255,214,10,0.12)' },
-  arbitration_reward:  { icon: Award,       color: '#a78bfa',      bg: 'rgba(167,139,250,0.12)' },
-  default:             { icon: Zap,         color: 'var(--text-2)', bg: 'var(--surface-2)' },
+  goal_reward:         { icon: Target,       color: 'var(--green)',  bg: 'rgba(48,209,88,0.12)' },
+  goal_completed:      { icon: Target,       color: 'var(--green)',  bg: 'rgba(48,209,88,0.12)' },
+  watch_reward:        { icon: Award,        color: '#818cf8',       bg: 'rgba(99,102,241,0.12)' },
+  watcher_reward:      { icon: Award,        color: '#818cf8',       bg: 'rgba(99,102,241,0.12)' },
+  vote_bonus:          { icon: Vote,         color: '#a78bfa',       bg: 'rgba(167,139,250,0.12)' },
+  stake_win:           { icon: ArrowUpRight, color: 'var(--green)',  bg: 'rgba(48,209,88,0.12)' },
+  stake_loss:          { icon: ArrowDownLeft, color: 'var(--red)',   bg: 'rgba(255,69,58,0.12)' },
+  teacher_payment:     { icon: BookOpen,     color: 'var(--yellow)', bg: 'rgba(255,214,10,0.12)' },
+  arbitration_reward:  { icon: Award,        color: '#a78bfa',       bg: 'rgba(167,139,250,0.12)' },
+  arbitrator_reward:   { icon: Award,        color: '#a78bfa',       bg: 'rgba(167,139,250,0.12)' },
+  report_bonus:        { icon: Award,        color: 'var(--orange)', bg: 'rgba(255,159,10,0.12)' },
+  default:             { icon: Zap,          color: 'var(--text-2)', bg: 'var(--surface-2)' },
 };
 
 const TX_LABELS: Record<string, string> = {
   goal_reward: 'Цель выполнена',
+  goal_completed: 'Цель выполнена',
   watch_reward: 'Награда смотрящего',
+  watcher_reward: 'Награда смотрящего',
   vote_bonus: 'Бонус за голосование',
   stake_win: 'Выигрыш ставки',
   stake_loss: 'Проигрыш ставки',
   teacher_payment: 'Оплата учителю',
   arbitration_reward: 'Награда арбитра',
+  arbitrator_reward: 'Награда арбитра',
+  report_bonus: 'Бонус за жалобу',
 };
 
 export default function LITPage() {
   const { user } = useAuthStore();
+  const { setActiveTab } = useUIStore();
   const [transactions, setTransactions] = useState<LitTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -117,6 +126,46 @@ export default function LITPage() {
           <MiniStat label="Уровень" value={`${user?.level ?? 1}`} color="var(--accent)" />
         </div>
       </div>
+
+      {/* Voting CTA */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        style={{ margin: '16px 16px 0' }}
+      >
+        <button
+          onClick={() => setActiveTab('voting')}
+          style={{
+            width: '100%',
+            padding: '14px 16px',
+            background: 'rgba(167,139,250,0.1)',
+            border: '1px solid rgba(167,139,250,0.25)',
+            borderRadius: 16,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            textAlign: 'left',
+          }}
+        >
+          <div
+            style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: 'rgba(167,139,250,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Vote size={20} color="#a78bfa" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#c4b5fd' }}>Проголосуй и заработай LIT</div>
+            <div style={{ fontSize: 12, color: 'rgba(196,181,253,0.6)', marginTop: 2 }}>+2 LIT за каждое честное голосование</div>
+          </div>
+          <ChevronRight size={16} color="rgba(196,181,253,0.5)" />
+        </button>
+      </motion.div>
 
       {/* History */}
       <div className="px-4 mt-6">

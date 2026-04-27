@@ -92,20 +92,7 @@ router.post('/:id/vote', requireAuth, async (req: Request, res: Response) => {
       where: { id: BigInt(sessionId) },
       data: { votesCount: { increment: 1 } },
     }),
-    // Бонус за голосование — будет пересчитан при закрытии
-    prisma.litTransaction.create({
-      data: {
-        userId: BigInt(req.user!.userId),
-        amount: 2,
-        type: 'vote_bonus',
-        relatedId: session.goalId,
-        note: 'Бонус за участие в голосовании',
-      },
-    }),
-    prisma.user.update({
-      where: { id: BigInt(req.user!.userId) },
-      data: { litBalance: { increment: 2 } },
-    }),
+    // Бонус начисляется только честным судьям при закрытии голосования (±1 от медианы)
   ]);
 
   return res.json({ success: true });

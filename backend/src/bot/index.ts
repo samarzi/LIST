@@ -128,11 +128,71 @@ export function createBot(token: string, miniAppUrl: string) {
     );
   });
 
+  // /checkin <текст> — отправить чекин прямо из бота
+  bot.command('checkin', async ctx => {
+    const tgUser = ctx.from;
+    if (!tgUser) return;
+
+    const user = await prisma.user.findUnique({ where: { telegramId: BigInt(tgUser.id) } });
+    if (!user) return ctx.reply('Сначала запусти бота командой /start');
+
+    const activeGoal = await prisma.goal.findFirst({
+      where: { userId: user.id, status: 'in_progress' },
+      orderBy: { deadline: 'asc' },
+    });
+
+    if (!activeGoal) {
+      return ctx.reply('У тебя нет активных целей. Создай цель в приложении.', {
+        ...Markup.inlineKeyboard([[Markup.button.webApp('📱 Открыть LIST', miniAppUrl)]]),
+      });
+    }
+
+    // Текст после команды: /checkin <текст>
+    const content = ctx.message.text?.replace(/^\/checkin\s*/, '').trim() || null;
+
+    if (!content) {
+      return ctx.reply(
+        `📝 *Чекин по цели:*\n_${activeGoal.title}_\n\nОтправь чекин так:\n\`/checkin Сегодня я сделал...\``,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    await prisma.checkin.create({
+      data: {
+        goalId: activeGoal.id,
+        userId: user.id,
+        content,
+        mediaUrls: [],
+      },
+    });
+
+    await ctx.reply(`✅ *Чекин принят!*\n\nПродолжай в том же духе 💪`, { parse_mode: 'Markdown' });
+
+    // Уведомляем смотрящего
+    const pair = await prisma.pair.findFirst({
+      where: { studentId: user.id, status: 'active' },
+      include: { watcher: true },
+    });
+    if (pair) {
+      await ctx.telegram.sendMessage(
+        Number(pair.watcher.telegramId),
+        `👁 *Новый чекин от ${user.displayName ?? user.username ?? 'ученика'}*\n\n` +
+        `Цель: _${activeGoal.title}_\n` +
+        `Текст: ${content.slice(0, 300)}`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.webApp('📱 Открыть LIST', miniAppUrl)]]),
+        }
+      ).catch(() => {});
+    }
+  });
+
   bot.command('help', ctx => {
     ctx.reply(
       '*Команды LIST:*\n\n' +
       '/start — главное меню\n' +
       '/goals — мои активные цели\n' +
+      '/checkin — отправить чекин\n' +
       '/balance — баланс LIT\n' +
       '/partner — мой смотрящий\n' +
       '/help — помощь',

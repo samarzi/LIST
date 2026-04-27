@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Target, Eye, Trophy, Coins, BookOpen } from 'lucide-react';
+import { Target, Eye, Trophy, Coins, Vote } from 'lucide-react';
 import { useUIStore } from '../store';
 
 const tabs = [
@@ -7,7 +7,7 @@ const tabs = [
   { id: 'watch', label: 'Слежу', icon: Eye },
   { id: 'leaderboard', label: 'Рейтинг', icon: Trophy },
   { id: 'lit', label: 'LIT', icon: Coins },
-  { id: 'teachers', label: 'Учителя', icon: BookOpen },
+  { id: 'voting', label: 'Голосовать', icon: Vote },
 ];
 
 export default function BottomNav() {

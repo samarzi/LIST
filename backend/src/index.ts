@@ -4,7 +4,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createBot } from './bot';
 import { setBotInstance } from './services/matching';
-// import './services/queue'; // Инициализация воркеров (отключено без Redis)
+import { startScheduler } from './services/scheduler';
 import './lib/sentry'; // Инициализация Sentry
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
@@ -81,6 +81,8 @@ async function main() {
   } else {
     console.warn('TELEGRAM_BOT_TOKEN not set — bot disabled');
   }
+
+  startScheduler();
 
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

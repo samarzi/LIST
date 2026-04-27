@@ -18,7 +18,19 @@ const STATUS_FILTERS = [
   { id: 'all', label: 'Все' },
   { id: 'active', label: 'Активные' },
   { id: 'completed', label: 'Выполнено' },
+  { id: 'failed', label: 'Провалено' },
 ];
+
+const STATUS_RU: Record<string, string> = {
+  draft: 'Черновик',
+  on_review: 'На оценке',
+  in_progress: 'В процессе',
+  on_check: 'На проверке',
+  on_voting: 'Голосование',
+  completed: 'Выполнено ✓',
+  failed: 'Провалено',
+  rejected: 'Отклонено',
+};
 
 export default function GoalsPage() {
   const { user } = useAuthStore();
@@ -46,6 +58,7 @@ export default function GoalsPage() {
   const filtered = goals.filter(g => {
     if (filter === 'active') return ['in_progress', 'on_check', 'on_voting', 'on_review'].includes(g.status);
     if (filter === 'completed') return g.status === 'completed';
+    if (filter === 'failed') return g.status === 'failed' || g.status === 'rejected';
     return true;
   });
 
@@ -445,7 +458,7 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
 
         {/* Status */}
         <div className="flex items-center gap-3 mb-4">
-          <span className="badge badge-accent">{goal.status}</span>
+          <span className="badge badge-accent">{STATUS_RU[goal.status] ?? goal.status}</span>
           <span className="caption text-faint">
             {daysLeft > 0 ? `${daysLeft}д до дедлайна` : daysLeft === 0 ? 'Сегодня!' : 'Просрочена'}
           </span>

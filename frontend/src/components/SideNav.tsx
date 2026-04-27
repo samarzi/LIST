@@ -3,9 +3,10 @@ import { useUIStore } from '../store';
 
 const NAV_ITEMS = [
   { id: 'goals', label: 'Цели', icon: '🎯' },
-  { id: 'watch', label: 'Смотрящий', icon: '👁️' },
+  { id: 'watch', label: 'Слежу', icon: '👁️' },
   { id: 'leaderboard', label: 'Рейтинг', icon: '🏆' },
   { id: 'lit', label: 'LIT', icon: '💎' },
+  { id: 'voting', label: 'Голосование', icon: '🗳️' },
   { id: 'teachers', label: 'Учителя', icon: '👨‍🏫' },
 ];
 

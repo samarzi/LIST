@@ -384,20 +384,54 @@ input[type='range'] {
   border-radius: var(--radius-full);
   outline: none;
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: transparent;
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  border: none;
+}
+
+input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
 }
 
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: var(--accent-grd);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.5);
+  background: linear-gradient(135deg, #6366f1 0%, #0A84FF 100%);
+  box-shadow: 0 2px 14px rgba(99, 102, 241, 0.55), 0 0 0 3px rgba(99,102,241,0.15);
   cursor: pointer;
-  transition: transform 0.12s var(--ease-spring);
+  transition: transform 0.12s var(--ease-spring), box-shadow 0.12s;
+  margin-top: -10px;
 }
-input[type='range']:active::-webkit-slider-thumb { transform: scale(1.2); }
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.7), 0 0 0 5px rgba(99,102,241,0.2);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #6366f1 0%, #0A84FF 100%);
+  box-shadow: 0 2px 14px rgba(99, 102, 241, 0.55);
+  cursor: pointer;
+}
 
 /* ─── Divider ────────────────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin: var(--space-4) 0; }
@@ -568,5 +602,69 @@ button, a, [role='button'] { -webkit-tap-highlight-color: transparent; }
 @media (min-width: 768px) {
   .modal-handle {
     display: none;
+  }
+}
+
+/* ─── Page header ─────────────────────────────────────────── */
+.page-header {
+  padding: 20px var(--space-4) 12px;
+}
+
+@media (min-width: 768px) {
+  .page-header {
+    padding: 28px var(--space-6) 16px;
+    max-width: 720px;
+  }
+}
+
+/* ─── Icon box ────────────────────────────────────────────── */
+.icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+/* ─── Notification banner ─────────────────────────────────── */
+.banner-warning {
+  padding: 12px 14px;
+  background: rgba(255,159,10,0.08);
+  border: 1px solid rgba(255,159,10,0.25);
+  border-radius: 14px;
+}
+
+.banner-info {
+  padding: 12px 14px;
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 14px;
+}
+
+/* ─── Voting page specific ───────────────────────────────── */
+.score-track {
+  position: relative;
+  width: 100%;
+}
+
+.score-track-fill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 6px;
+  border-radius: 3px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+  transition: width 0.05s linear;
+}
+
+/* ─── mt-0.5 helper ───────────────────────────────────────── */
+.mt-05 { margin-top: 2px; }
+
+/* ─── Desktop max-width for page content ─────────────────── */
+@media (min-width: 768px) {
+  .page-content > * {
+    max-width: 720px;
   }
 }
