@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: list-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://list-backend.onrender.com/api

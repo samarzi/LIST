@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(docker info *)",
+      "Bash(docker-compose up *)",
+      "Bash(psql --version)",
+      "Bash(brew services *)",
+      "Bash(psql postgres *)",
+      "Bash(npx prisma *)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}

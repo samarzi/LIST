@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  BigInt   @id @default(autoincrement())
+  telegramId          BigInt   @unique @map("telegram_id")
+  username            String?
+  displayName         String?  @map("display_name")
+  firstName           String?  @map("first_name")
+  lastName            String?  @map("last_name")
+  photoUrl            String?  @map("photo_url")
+  level               Int      @default(1)
+  rating              Decimal  @default(5.00) @db.Decimal(3, 2)
+  litBalance          Int      @default(0) @map("lit_balance")
+  isTeacher           Boolean  @default(false) @map("is_teacher")
+  teacherRating       Decimal? @map("teacher_rating") @db.Decimal(3, 2)
+  isArbitrator        Boolean  @default(false) @map("is_arbitrator")
+  freezeCount30d      Int      @default(0) @map("freeze_count_30d")
+  totalGoalsCompleted Int      @default(0) @map("total_goals_completed")
+  totalGoalsFailed    Int      @default(0) @map("total_goals_failed")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  watcherPairs        Pair[]            @relation("WatcherPairs")
+  studentPairs        Pair[]            @relation("StudentPairs")
+  goals               Goal[]
+  checkins            Checkin[]
+  votes               Vote[]
+  litTransactions     LitTransaction[]
+  reports             Report[]          @relation("ReporterReports")
+  arbitratedReports   Report[]          @relation("ArbitratorReports")
+  teacherProfile      TeacherProfile?
+  teacherRelations    TeacherStudent[]  @relation("TeacherRelations")
+  studentRelations    TeacherStudent[]  @relation("StudentRelations")
+  createdGroups       Group[]
+  groupMemberships    GroupMember[]
+
+  @@map("users")
+}
+
+model Pair {
+  id                  BigInt    @id @default(autoincrement())
+  watcherId           BigInt    @map("watcher_id")
+  studentId           BigInt    @map("student_id")
+  status              String    @default("active")
+  freezeInitiatedBy   BigInt?   @map("freeze_initiated_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  endedAt             DateTime? @map("ended_at")
+
+  watcher             User      @relation("WatcherPairs", fields: [watcherId], references: [id])
+  student             User      @relation("StudentPairs", fields: [studentId], references: [id])
+  goals               Goal[]
+
+  @@map("pairs")
+}
+
+model Goal {
+  id              BigInt    @id @default(autoincrement())
+  userId          BigInt    @map("user_id")
+  pairId          BigInt?   @map("pair_id")
+  title           String    @db.VarChar(200)
+  successCriteria String    @map("success_criteria") @db.Text
+  motivation      String?   @db.Text
+  actionPlan      String?   @map("action_plan") @db.Text
+  proofType       String?   @map("proof_type") @db.VarChar(50)
+  deadline        DateTime  @db.Date
+  difficulty      Int?
+  stakeLit        Int       @default(0) @map("stake_lit")
+  status          String    @default("draft")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  user            User           @relation(fields: [userId], references: [id])
+  pair            Pair?          @relation(fields: [pairId], references: [id])
+  checkins        Checkin[]
+  proofs          Proof[]
+  votes           Vote[]
+  votingSession   VotingSession?
+  reports         Report[]
+
+  @@map("goals")
+}
+
+model Checkin {
+  id          BigInt    @id @default(autoincrement())
+  goalId      BigInt    @map("goal_id")
+  userId      BigInt    @map("user_id")
+  content     String?   @db.Text
+  mediaUrls   String[]  @map("media_urls")
+  confirmed   Boolean   @default(false)
+  confirmedAt DateTime? @map("confirmed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  goal        Goal      @relation(fields: [goalId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@map("checkins")
+}
+
+model Proof {
+  id               BigInt    @id @default(autoincrement())
+  goalId           BigInt    @map("goal_id")
+  description      String    @db.Text
+  mediaUrls        String[]  @map("media_urls")
+  watcherConfirmed Boolean?  @map("watcher_confirmed")
+  watcherNote      String?   @map("watcher_note") @db.Text
+  submittedAt      DateTime  @default(now()) @map("submitted_at")
+  confirmedAt      DateTime? @map("confirmed_at")
+
+  goal             Goal      @relation(fields: [goalId], references: [id])
+
+  @@map("proofs")
+}
+
+model Vote {
+  id           BigInt   @id @default(autoincrement())
+  goalId       BigInt   @map("goal_id")
+  voterId      BigInt   @map("voter_id")
+  scoreGoal    Int      @map("score_goal")
+  scoreWatcher Int      @map("score_watcher")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  goal         Goal     @relation(fields: [goalId], references: [id])
+  voter        User     @relation(fields: [voterId], references: [id])
+
+  @@unique([goalId, voterId])
+  @@map("votes")
+}
+
+model VotingSession {
+  id            BigInt    @id @default(autoincrement())
+  goalId        BigInt    @unique @map("goal_id")
+  requiredVotes Int       @map("required_votes")
+  votesCount    Int       @default(0) @map("votes_count")
+  deadline      DateTime
+  status        String    @default("open")
+  medianGoal    Decimal?  @map("median_goal") @db.Decimal(3, 1)
+  medianWatcher Decimal?  @map("median_watcher") @db.Decimal(3, 1)
+  closedAt      DateTime? @map("closed_at")
+
+  goal          Goal      @relation(fields: [goalId], references: [id])
+
+  @@map("voting_sessions")
+}
+
+model LitTransaction {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  amount    Int
+  type      String   @db.VarChar(50)
+  relatedId BigInt?  @map("related_id")
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("lit_transactions")
+}
+
+model Report {
+  id           BigInt    @id @default(autoincrement())
+  reporterId   BigInt    @map("reporter_id")
+  goalId       BigInt    @map("goal_id")
+  reason       String    @db.Text
+  status       String    @default("pending")
+  arbitratorId BigInt?   @map("arbitrator_id")
+  decisionNote String?   @map("decision_note") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  resolvedAt   DateTime? @map("resolved_at")
+
+  reporter     User      @relation("ReporterReports", fields: [reporterId], references: [id])
+  goal         Goal      @relation(fields: [goalId], references: [id])
+  arbitrator   User?     @relation("ArbitratorReports", fields: [arbitratorId], references: [id])
+
+  @@map("reports")
+}
+
+model TeacherProfile {
+  id            BigInt   @id @default(autoincrement())
+  userId        BigInt   @unique @map("user_id")
+  topic         String?  @db.VarChar(200)
+  description   String?  @db.Text
+  status        String   @default("trial")
+  studentsCount Int      @default(0) @map("students_count")
+  trialStudents Int      @default(0) @map("trial_students")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user          User             @relation(fields: [userId], references: [id])
+  students      TeacherStudent[]
+
+  @@map("teacher_profiles")
+}
+
+model TeacherStudent {
+  id            BigInt    @id @default(autoincrement())
+  teacherId     BigInt    @map("teacher_id")
+  studentId     BigInt    @map("student_id")
+  status        String    @default("active")
+  litAmount     Int?      @map("lit_amount")
+  studentRating Decimal?  @map("student_rating") @db.Decimal(3, 2)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  endedAt       DateTime? @map("ended_at")
+
+  teacher        User           @relation("TeacherRelations", fields: [teacherId], references: [id])
+  student        User           @relation("StudentRelations", fields: [studentId], references: [id])
+  teacherProfile TeacherProfile @relation(fields: [teacherId], references: [userId], map: "teacher_students_profile_fkey")
+
+  @@map("teacher_students")
+}
+
+model Group {
+  id           BigInt   @id @default(autoincrement())
+  creatorId    BigInt   @map("creator_id")
+  name         String   @db.VarChar(200)
+  description  String?  @db.Text
+  topic        String?  @db.VarChar(200)
+  isPublic     Boolean  @default(true) @map("is_public")
+  maxMembers   Int      @default(10) @map("max_members")
+  membersCount Int      @default(1) @map("members_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  creator      User          @relation(fields: [creatorId], references: [id])
+  members      GroupMember[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       BigInt   @id @default(autoincrement())
+  groupId  BigInt   @map("group_id")
+  userId   BigInt   @map("user_id")
+  role     String   @default("member")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  group    Group    @relation(fields: [groupId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
