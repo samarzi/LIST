@@ -74,7 +74,7 @@ export default function GoalsPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-4" style={{ marginBottom: 12 }}>
         <div>
-          <h1 className="title-md">Мои цели</h1>
+          <h1 className="title-lg text-gradient">Мои цели</h1>
           <p className="body-sm text-faint mt-1">{goals.length} цел{goals.length === 1 ? 'ь' : 'и'}</p>
         </div>
         <motion.button
@@ -560,7 +560,7 @@ function EmptyGoals({ onAdd }: { onAdd: () => void }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
-      <div className="empty-icon" style={{ background: 'var(--accent-grd-soft)', border: '1px solid var(--border)' }}>
+      <div className="empty-icon">
         <span style={{ fontSize: 28 }}>🎯</span>
       </div>
       <div>

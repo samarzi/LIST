@@ -32,7 +32,7 @@ export default function LeaderboardPage() {
     <div className="page-content">
       {/* Header */}
       <div className="px-4" style={{ paddingTop: 24, paddingBottom: 12 }}>
-        <h1 className="title-lg">Рейтинг</h1>
+        <h1 className="title-lg text-gradient">Рейтинг</h1>
         {myRank && (
           <p className="body-sm text-faint mt-1">Ты на <span style={{ color: 'var(--accent)' }}>#{myRank}</span> месте</p>
         )}

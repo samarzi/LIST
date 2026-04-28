@@ -49,7 +49,7 @@ export default function WatchPage() {
     <div className="page-content">
       {/* Header */}
       <div style={{ padding: '24px 16px 12px' }}>
-        <h1 className="title-lg">Слежу</h1>
+        <h1 className="title-lg text-gradient">Слежу</h1>
         <p className="body-sm text-faint mt-2">Партнёры и их прогресс</p>
       </div>
 

@@ -28,10 +28,11 @@ export default function BottomNav() {
         width: '100%',
         maxWidth: 540,
         height: 'var(--nav-h)',
-        background: 'rgba(11, 11, 14, 0.92)',
-        backdropFilter: 'blur(28px)',
-        WebkitBackdropFilter: 'blur(28px)',
-        borderTop: '1px solid var(--border)',
+        background: 'rgba(12, 12, 16, 0.96)',
+        backdropFilter: 'blur(32px)',
+        WebkitBackdropFilter: 'blur(32px)',
+        borderTop: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: '0 -1px 0 rgba(99,102,241,0.08)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-around',
@@ -74,9 +75,10 @@ export default function BottomNav() {
                   marginLeft: -19,
                   width: 38,
                   height: 30,
-                  background: 'rgba(99, 102, 241, 0.14)',
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.28) 0%, rgba(10,132,255,0.18) 100%)',
                   borderRadius: 10,
                   zIndex: 0,
+                  boxShadow: '0 0 12px rgba(99,102,241,0.3)',
                 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }}
               />
@@ -89,14 +91,14 @@ export default function BottomNav() {
               <Icon
                 size={21}
                 strokeWidth={active ? 2.3 : 1.7}
-                color={active ? '#818cf8' : 'rgba(255,255,255,0.36)'}
+                color={active ? '#a5b4fc' : 'rgba(255,255,255,0.32)'}
               />
             </motion.div>
             <span
               style={{
                 fontSize: 9.5,
                 fontWeight: active ? 700 : 400,
-                color: active ? '#818cf8' : 'rgba(255,255,255,0.36)',
+                color: active ? '#a5b4fc' : 'rgba(255,255,255,0.32)',
                 letterSpacing: active ? 0.1 : 0,
                 transition: 'color 0.2s',
                 lineHeight: 1,

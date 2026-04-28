@@ -62,7 +62,7 @@ export default function VotingPage() {
   return (
     <div className="page-content">
       <div style={{ padding: '24px 16px 0' }}>
-        <h1 className="title-lg">Голосование</h1>
+        <h1 className="title-lg text-gradient">Голосование</h1>
         <p className="body-sm text-faint mt-2">
           Оцени результат объективно — это влияет на LIT и рейтинг
         </p>
