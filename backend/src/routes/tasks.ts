@@ -61,6 +61,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
         userId,
         title: parsed.data.title,
         description: parsed.data.description,
+        reminderTime: parsed.data.reminderTime ? new Date(parsed.data.reminderTime) : null,
       },
     });
 
