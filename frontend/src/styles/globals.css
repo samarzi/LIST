@@ -511,9 +511,9 @@ button, a, [role='button'] { -webkit-tap-highlight-color: transparent; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   z-index: 100;
   display: flex;
   align-items: flex-end;
@@ -532,13 +532,14 @@ button, a, [role='button'] { -webkit-tap-highlight-color: transparent; }
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
-  background: var(--bg-3);
-  border: 1px solid var(--border-2);
+  background: #1a1a24;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius) var(--radius);
   padding: var(--space-5);
   max-height: 88vh;
   overflow-y: auto;
   overflow-x: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 }
 
 @media (min-width: 768px) {

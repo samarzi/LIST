@@ -27,15 +27,6 @@ export function setBotInstance(bot: Telegraf) {
  * - Они не были в паре раньше
  */
 async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser): Promise<boolean> {
-  // Проверка уровня (разница не более 2)
-  const levelDiff = Math.abs(user1.level - user2.level);
-  console.log(`Level check: user1=${user1.level}, user2=${user2.level}, diff=${levelDiff}`);
-  
-  if (levelDiff > 2) {
-    console.log('Compatibility failed: level difference > 2');
-    return false;
-  }
-
   // Проверка: не были ли они в паре раньше
   const previousPair = await prisma.pair.findFirst({
     where: {
