@@ -68,29 +68,33 @@ router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
     },
   });
 
-  return res.json(pairs.map(p => ({
-    pairId: Number(p.id),
-    partner: {
-      ...p.partner,
-      id: Number(p.partner.id),
-      rating: Number(p.partner.rating),
-      activeGoals: (p.partner as unknown as {
-        goals: {
-          id: bigint; title: string; deadline: Date; status: string; successCriteria: string;
-          _count: { checkins: number };
-          proofs: { description: string; mediaUrls: string[] }[];
-        }[]
-      }).goals.map((g) => ({
-        id: Number(g.id),
-        title: g.title,
-        successCriteria: g.successCriteria,
-        deadline: g.deadline,
-        status: g.status,
-        checkinsCount: g._count.checkins,
-        latestProof: g.proofs[0] ?? null,
-      })),
-    },
-  })));
+  return res.json(pairs.map(p => {
+    const partnerGoals = (p.partner as unknown as {
+      goals: {
+        id: bigint; title: string; deadline: Date; status: string; successCriteria: string;
+        _count: { checkins: number };
+        proofs: { description: string; mediaUrls: string[] }[];
+      }[] | undefined
+    }).goals || [];
+
+    return {
+      pairId: Number(p.id),
+      partner: {
+        ...p.partner,
+        id: Number(p.partner.id),
+        rating: Number(p.partner.rating),
+        activeGoals: partnerGoals.map((g) => ({
+          id: Number(g.id),
+          title: g.title,
+          successCriteria: g.successCriteria,
+          deadline: g.deadline,
+          status: g.status,
+          checkinsCount: g._count.checkins,
+          latestProof: g.proofs[0] ?? null,
+        })),
+      },
+    };
+  }));
 });
 
 // Вход в очередь матчинга
