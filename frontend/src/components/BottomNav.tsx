@@ -71,7 +71,7 @@ export default function BottomNav() {
                   position: 'absolute',
                   top: 0,
                   left: '50%',
-                  transform: 'translateX(-50%)',
+                  marginLeft: -19,
                   width: 38,
                   height: 30,
                   background: 'rgba(99, 102, 241, 0.14)',

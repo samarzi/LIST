@@ -533,6 +533,7 @@ button, a, [role='button'] { -webkit-tap-highlight-color: transparent; }
   padding: var(--space-5);
   max-height: 88vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @media (min-width: 768px) {
