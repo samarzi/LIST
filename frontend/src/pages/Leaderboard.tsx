@@ -94,6 +94,19 @@ export default function LeaderboardPage() {
             </div>
           )}
 
+          {/* Empty state */}
+          {users.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-icon">
+                <Trophy size={28} color="var(--text-3)" />
+              </div>
+              <div>
+                <h3 className="title-sm">Рейтинг пуст</h3>
+                <p className="body-sm text-faint mt-2">Выполняй цели — и окажешься на вершине</p>
+              </div>
+            </div>
+          )}
+
           {/* Rest */}
           <div className="px-4">
             {rest.map((user, i) => (

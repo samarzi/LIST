@@ -119,11 +119,19 @@ export default function App() {
       initDataPreview: initData.substring(0, 100),
     });
 
-    // Dev mode fallback — simulate a user
+    // Dev mode fallback — skip API entirely
     if (!initData && import.meta.env.DEV) {
-      const devUser = { id: 123456789, username: 'devuser', first_name: 'Dev', last_name: 'User' };
-      initData = `test:${JSON.stringify(devUser)}`;
-      console.log('Using dev mode fallback');
+      const mockUser = {
+        id: 1, telegramId: 123456789, username: 'devuser',
+        displayName: 'Александр К.', firstName: 'Александр', lastName: 'К.',
+        photoUrl: null, level: 5, rating: 4.3, litBalance: 240,
+        isTeacher: false, isArbitrator: false, teacherRating: null,
+        freezeCount30d: 0, totalGoalsCompleted: 8, totalGoalsFailed: 2,
+        createdAt: new Date().toISOString(),
+      };
+      setAuth('dev-token', mockUser as any);
+      setAuthState('authed');
+      return;
     }
 
     if (!initData) {
@@ -193,7 +201,7 @@ export default function App() {
       {isDesktop && <SideNav />}
 
       {/* Page content with animated transitions */}
-      <div className="page-content" style={{ position: 'relative', zIndex: 1 }}>
+      <div className="page-content">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
