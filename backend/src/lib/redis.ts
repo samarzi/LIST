@@ -1,12 +1,13 @@
 import Redis from 'ioredis';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisUrl = process.env.REDIS_URL?.trim();
+const redisEnabled = process.env.REDIS_AVAILABLE === 'true';
 
-// Создаём Redis клиент если не в тестовом режиме и Redis не отключен явно
-const shouldConnect = process.env.NODE_ENV !== 'test' && process.env.REDIS_AVAILABLE !== 'false';
+// Подключаем Redis только если он явно включён и URL задан
+const shouldConnect = process.env.NODE_ENV !== 'test' && redisEnabled && !!redisUrl;
 
 export const redis = shouldConnect
-  ? new Redis(redisUrl, {
+  ? new Redis(redisUrl!, {
       maxRetriesPerRequest: null, // BullMQ требует null
       enableReadyCheck: false,
     })
