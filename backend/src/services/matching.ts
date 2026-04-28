@@ -28,7 +28,11 @@ export function setBotInstance(bot: Telegraf) {
  */
 async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser): Promise<boolean> {
   // Проверка уровня (разница не более 2)
-  if (Math.abs(user1.level - user2.level) > 2) {
+  const levelDiff = Math.abs(user1.level - user2.level);
+  console.log(`Level check: user1=${user1.level}, user2=${user2.level}, diff=${levelDiff}`);
+  
+  if (levelDiff > 2) {
+    console.log('Compatibility failed: level difference > 2');
     return false;
   }
 
@@ -49,9 +53,11 @@ async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser)
   });
 
   if (previousPair) {
+    console.log('Compatibility failed: previous pair exists');
     return false;
   }
 
+  console.log('Compatibility passed');
   return true;
 }
 
@@ -111,7 +117,14 @@ async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
     // Сначала получаем всех пользователей в Redis очереди
     const keys = await redis.keys('matching:user:*');
     console.log('Redis keys found:', keys.length);
+    
+    if (keys.length === 0) {
+      console.log('No users in Redis queue');
+      return [];
+    }
+    
     const userIdsInQueue = keys.map(key => BigInt(key.replace('matching:user:', '')));
+    console.log('User IDs in queue:', userIdsInQueue.map(id => id.toString()));
 
     if (userIdsInQueue.length === 0) {
       console.log('No users in queue');
@@ -135,6 +148,7 @@ async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
     });
 
     console.log('Users fetched from DB:', users.length);
+    console.log('Users in DB:', users.map(u => ({ id: u.id.toString(), username: u.username, level: u.level })));
 
     // Фильтруем тех, у кого нет активной пары как партнер
     const usersWithoutPartnerPair: MatchingQueueUser[] = [];
@@ -146,6 +160,8 @@ async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
           status: 'active',
         },
       });
+      
+      console.log(`User ${user.id} has partner pair: ${!!hasPartnerPair}`);
       
       if (!hasPartnerPair) {
         usersWithoutPartnerPair.push({
@@ -263,7 +279,7 @@ export async function runMatching(): Promise<{ pairsCreated: number }> {
  * FIFO логика: если есть кто-то в очереди раньше - он партнер, этот пользователь смотрящий
  */
 export async function matchUser(userId: bigint): Promise<{ matched: boolean; partner?: MatchingQueueUser; role?: 'partner' | 'watcher' }> {
-  console.log('matchUser called for userId:', userId);
+  console.log('=== matchUser called for userId:', userId, '===');
   
   try {
     const user = await prisma.user.findUnique({
@@ -283,13 +299,20 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
       return { matched: false };
     }
 
+    console.log('User found:', { id: user.id, username: user.username, level: user.level });
+
     const waitingUsers = await getWaitingUsers();
-    console.log('Waiting users:', waitingUsers.length);
+    console.log('Total waiting users:', waitingUsers.length);
     const userData = { ...user, rating: Number(user.rating) };
 
     // Если пользователь первый в очереди - нет партнера
-    if (waitingUsers.length === 0 || waitingUsers[0].id === userId) {
-      console.log('User is first in queue or queue is empty');
+    if (waitingUsers.length === 0) {
+      console.log('Queue is empty - no match possible');
+      return { matched: false };
+    }
+    
+    if (waitingUsers[0].id === userId) {
+      console.log('User is first in queue - waiting for others');
       return { matched: false };
     }
 
@@ -297,7 +320,7 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
     for (const otherUser of waitingUsers) {
       if (otherUser.id === userId) continue;
       
-      console.log('Checking compatibility with user:', otherUser.id);
+      console.log('Checking compatibility with user:', otherUser.id, 'level:', otherUser.level);
       
       // Проверяем, что otherUser еще не имеет партнера
       const otherHasPartner = await prisma.pair.findFirst({
@@ -308,7 +331,7 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
       });
 
       if (otherHasPartner) {
-        console.log('User already has partner:', otherUser.id);
+        console.log('User already has partner:', otherUser.id, '- skipping');
         continue;
       }
 
@@ -323,6 +346,7 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
       }
     }
 
+    console.log('No compatible user found');
     return { matched: false };
   } catch (error) {
     console.error('Error in matchUser:', error);
