@@ -10,6 +10,7 @@ import WatchPage from './pages/Watch';
 import LeaderboardPage from './pages/Leaderboard';
 import LITPage from './pages/LIT';
 import TeachersPage from './pages/Teachers';
+import VotingPage from './pages/Voting';
 
 declare global {
   interface Window {
@@ -59,6 +60,7 @@ const PAGES: Record<string, React.ComponentType> = {
   watch: WatchPage,
   leaderboard: LeaderboardPage,
   lit: LITPage,
+  voting: VotingPage,
   teachers: TeachersPage,
 };
 

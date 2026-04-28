@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import { Target, Eye, Trophy, Coins, BookOpen } from 'lucide-react';
+import { Target, Eye, Trophy, Zap, Vote } from 'lucide-react';
 import { useUIStore } from '../store';
 
 const tabs = [
-  { id: 'goals', label: 'Цели', icon: Target },
-  { id: 'watch', label: 'Слежу', icon: Eye },
-  { id: 'leaderboard', label: 'Рейтинг', icon: Trophy },
-  { id: 'lit', label: 'LIT', icon: Coins },
-  { id: 'teachers', label: 'Учителя', icon: BookOpen },
+  { id: 'goals',       label: 'Цели',     icon: Target },
+  { id: 'watch',       label: 'Слежу',    icon: Eye },
+  { id: 'leaderboard', label: 'Рейтинг',  icon: Trophy },
+  { id: 'lit',         label: 'LIT',      icon: Zap },
+  { id: 'voting',      label: 'Голосовать', icon: Vote },
 ];
 
 export default function BottomNav() {
@@ -28,15 +28,15 @@ export default function BottomNav() {
         width: '100%',
         maxWidth: 540,
         height: 'var(--nav-h)',
-        background: 'rgba(12, 12, 15, 0.85)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
+        background: 'rgba(11, 11, 14, 0.92)',
+        backdropFilter: 'blur(28px)',
+        WebkitBackdropFilter: 'blur(28px)',
         borderTop: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-around',
         paddingTop: 8,
-        paddingBottom: 8,
+        paddingBottom: 4,
         zIndex: 50,
       }}
     >
@@ -52,15 +52,16 @@ export default function BottomNav() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 4,
+              gap: 3,
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: '6px 4px',
+              padding: '4px 2px',
               borderRadius: 12,
               outline: 'none',
               position: 'relative',
               WebkitTapHighlightColor: 'transparent',
+              minWidth: 0,
             }}
           >
             {active && (
@@ -71,34 +72,38 @@ export default function BottomNav() {
                   top: 0,
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  width: 40,
-                  height: 32,
-                  background: 'rgba(99, 102, 241, 0.15)',
+                  width: 38,
+                  height: 30,
+                  background: 'rgba(99, 102, 241, 0.14)',
                   borderRadius: 10,
                   zIndex: 0,
                 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
               />
             )}
             <motion.div
-              animate={{ scale: active ? 1.1 : 1 }}
+              animate={{ scale: active ? 1.08 : 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
               style={{ position: 'relative', zIndex: 1 }}
             >
               <Icon
-                size={22}
-                strokeWidth={active ? 2.2 : 1.8}
-                color={active ? '#818cf8' : 'rgba(255,255,255,0.4)'}
+                size={21}
+                strokeWidth={active ? 2.3 : 1.7}
+                color={active ? '#818cf8' : 'rgba(255,255,255,0.36)'}
               />
             </motion.div>
             <span
               style={{
-                fontSize: 10,
-                fontWeight: active ? 600 : 400,
-                color: active ? '#818cf8' : 'rgba(255,255,255,0.4)',
-                letterSpacing: active ? 0.2 : 0,
-                transition: 'color 0.2s, font-weight 0.2s',
+                fontSize: 9.5,
+                fontWeight: active ? 700 : 400,
+                color: active ? '#818cf8' : 'rgba(255,255,255,0.36)',
+                letterSpacing: active ? 0.1 : 0,
+                transition: 'color 0.2s',
                 lineHeight: 1,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
               }}
             >
               {tab.label}
