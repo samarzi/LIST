@@ -44,6 +44,7 @@ const limiter = rateLimit({
   max: 60,
   keyGenerator: (req) => req.headers['x-telegram-user-id'] as string ?? req.ip ?? 'unknown',
   message: { error: 'Too many requests' },
+  skip: (req) => req.method === 'OPTIONS',
 });
 app.use('/api', limiter);
 
