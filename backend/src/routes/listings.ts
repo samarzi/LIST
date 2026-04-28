@@ -84,35 +84,49 @@ router.get('/my', requireAuth, async (req: Request, res: Response) => {
 
 // Create listing
 router.post('/', requireAuth, async (req: Request, res: Response) => {
+  console.log('=== Creating listing ===');
+  console.log('User ID:', req.user!.userId);
+  console.log('Request body:', JSON.stringify(req.body));
+  
   const { type, title, description, skills } = req.body;
 
   if (!type || !title) {
+    console.log('Missing required fields');
     return res.status(400).json({ error: 'Type and title are required' });
   }
 
   if (!['teacher', 'student', 'team'].includes(type)) {
+    console.log('Invalid type:', type);
     return res.status(400).json({ error: 'Invalid type' });
   }
 
-  const listing = await prisma.listing.create({
-    data: {
-      userId: BigInt(req.user!.userId),
-      type,
-      title,
-      description,
-      skills: skills || [],
-    },
-  });
+  console.log('Validation passed, creating listing...');
+  
+  try {
+    const listing = await prisma.listing.create({
+      data: {
+        userId: BigInt(req.user!.userId),
+        type,
+        title,
+        description,
+        skills: skills || [],
+      },
+    });
 
-  return res.status(201).json({
-    id: Number(listing.id),
-    type: listing.type,
-    title: listing.title,
-    description: listing.description,
-    skills: listing.skills,
-    status: listing.status,
-    createdAt: listing.createdAt.toISOString(),
-  });
+    console.log('Listing created successfully:', listing.id);
+    return res.status(201).json({
+      id: Number(listing.id),
+      type: listing.type,
+      title: listing.title,
+      description: listing.description,
+      skills: listing.skills,
+      status: listing.status,
+      createdAt: listing.createdAt.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error creating listing:', error);
+    return res.status(500).json({ error: 'Failed to create listing' });
+  }
 });
 
 // Update listing

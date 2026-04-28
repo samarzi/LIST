@@ -51,7 +51,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 // Create a new habit
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
-  console.log('Creating habit for user:', userId, 'body:', req.body);
+  console.log('=== Creating habit ===');
+  console.log('User ID:', userId);
+  console.log('Request body:', JSON.stringify(req.body));
+  
   const parsed = CreateHabitSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -59,25 +62,32 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
-  const habit = await prisma.habit.create({
-    data: {
-      userId,
-      title: parsed.data.title,
-      description: parsed.data.description,
-      targetDays: parsed.data.targetDays,
-    },
-  });
+  console.log('Validation passed, creating habit...');
+  
+  try {
+    const habit = await prisma.habit.create({
+      data: {
+        userId,
+        title: parsed.data.title,
+        description: parsed.data.description,
+        targetDays: parsed.data.targetDays,
+      },
+    });
 
-  console.log('Habit created:', habit.id);
-  return res.status(201).json({
-    id: Number(habit.id),
-    title: habit.title,
-    description: habit.description,
-    targetDays: habit.targetDays,
-    createdAt: habit.createdAt,
-    updatedAt: habit.updatedAt,
-    completedToday: false,
-  });
+    console.log('Habit created successfully:', habit.id);
+    return res.status(201).json({
+      id: Number(habit.id),
+      title: habit.title,
+      description: habit.description,
+      targetDays: habit.targetDays,
+      createdAt: habit.createdAt,
+      updatedAt: habit.updatedAt,
+      completedToday: false,
+    });
+  } catch (error) {
+    console.error('Error creating habit:', error);
+    return res.status(500).json({ error: 'Failed to create habit' });
+  }
 });
 
 // Update a habit

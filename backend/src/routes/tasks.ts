@@ -41,7 +41,11 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 // Create a new task
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
-  console.log('Creating task for user:', userId, 'body:', req.body);
+  console.log('=== Creating task ===');
+  console.log('User ID:', userId);
+  console.log('Request body:', JSON.stringify(req.body));
+  console.log('Request headers:', JSON.stringify(req.headers));
+  
   const parsed = CreateTaskSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -49,24 +53,31 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
-  const task = await prisma.task.create({
-    data: {
-      userId,
-      title: parsed.data.title,
-      description: parsed.data.description,
-    },
-  });
+  console.log('Validation passed, creating task...');
+  
+  try {
+    const task = await prisma.task.create({
+      data: {
+        userId,
+        title: parsed.data.title,
+        description: parsed.data.description,
+      },
+    });
 
-  console.log('Task created:', task.id);
-  return res.status(201).json({
-    id: Number(task.id),
-    title: task.title,
-    description: task.description,
-    completed: task.completed,
-    completedAt: task.completedAt,
-    createdAt: task.createdAt,
-    updatedAt: task.updatedAt,
-  });
+    console.log('Task created successfully:', task.id);
+    return res.status(201).json({
+      id: Number(task.id),
+      title: task.title,
+      description: task.description,
+      completed: task.completed,
+      completedAt: task.completedAt,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error creating task:', error);
+    return res.status(500).json({ error: 'Failed to create task' });
+  }
 });
 
 // Update a task
