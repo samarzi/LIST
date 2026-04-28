@@ -51,7 +51,7 @@ LIST/
 1. В Render Dashboard → New → Web Service
 2. Connect GitHub репозиторий
 3. Root directory: `backend`
-4. Build Command: `npm install && npm run build`
+4. Build Command: `npm install --include=dev && npm run build`
 5. Start Command: `npm start`
 6. Region: Frankfurt
 7. Plan: Free
