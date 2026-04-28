@@ -1,12 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Star, Zap, Shield, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Settings, Star, Zap, Shield, ChevronRight, History, Target, Award, Vote, ArrowUpRight, ArrowDownLeft, BookOpen, X, Users, Activity, Globe, Circle } from 'lucide-react';
 import type { User } from '../api/client';
+import { litApi, usersApi, type LitTransaction } from '../api/client';
 
 interface Props {
   user: User;
   onEdit?: () => void;
 }
+
+const TX_ICONS: Record<string, { icon: typeof Zap; color: string; bg: string }> = {
+  goal_reward:         { icon: Target,      color: 'var(--green)',  bg: 'rgba(48,209,88,0.12)' },
+  watch_reward:        { icon: Award,       color: '#818cf8',       bg: 'rgba(99,102,241,0.12)' },
+  vote_bonus:          { icon: Vote,        color: 'var(--accent)', bg: 'rgba(99,102,241,0.12)' },
+  stake_win:           { icon: ArrowUpRight, color: 'var(--green)', bg: 'rgba(48,209,88,0.12)' },
+  stake_loss:          { icon: ArrowDownLeft, color: 'var(--red)',  bg: 'rgba(255,69,58,0.12)' },
+  teacher_payment:     { icon: BookOpen,    color: 'var(--yellow)', bg: 'rgba(255,214,10,0.12)' },
+  arbitration_reward:  { icon: Award,       color: '#a78bfa',      bg: 'rgba(167,139,250,0.12)' },
+  default:             { icon: Zap,         color: 'var(--text-2)', bg: 'var(--surface-2)' },
+};
+
+const TX_LABELS: Record<string, string> = {
+  goal_reward: 'Цель выполнена',
+  watch_reward: 'Награда смотрящего',
+  vote_bonus: 'Бонус за голосование',
+  stake_win: 'Выигрыш ставки',
+  stake_loss: 'Проигрыш ставки',
+  teacher_payment: 'Оплата учителю',
+  arbitration_reward: 'Награда арбитра',
+};
 
 const LEVEL_LABELS: Record<number, string> = {
   1: 'Новичок', 2: 'Новичок', 3: 'Новичок',
@@ -15,13 +38,63 @@ const LEVEL_LABELS: Record<number, string> = {
   10: 'Мастер',
 };
 
+function AnalyticsStat({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number }) {
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+        <Icon size={16} color="var(--accent)" />
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function isOnline(lastSeenAt: string): boolean {
+  const lastSeen = new Date(lastSeenAt);
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  return lastSeen > fiveMinutesAgo;
+}
+
 export default function ProfileCard({ user, onEdit }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [transactions, setTransactions] = useState<LitTransaction[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [analytics, setAnalytics] = useState<{ totalUsers: number; onlineUsers: number; dailyActiveUsers: number } | null>(null);
   const name = user.displayName ?? user.firstName ?? user.username ?? 'Пользователь';
   const initials = name.slice(0, 2).toUpperCase();
   const levelLabel = LEVEL_LABELS[user.level] ?? 'Новичок';
   const total = user.totalGoalsCompleted + user.totalGoalsFailed;
   const winRate = total > 0 ? Math.round((user.totalGoalsCompleted / total) * 100) : 0;
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  async function loadAnalytics() {
+    try {
+      const { data } = await usersApi.analytics();
+      setAnalytics(data);
+    } catch (err) {
+      console.error('Failed to load analytics:', err);
+    }
+  }
+
+  async function loadHistory() {
+    if (transactions.length > 0) {
+      setShowHistory(true);
+      return;
+    }
+    setLoadingHistory(true);
+    try {
+      const { data } = await litApi.history(1);
+      setTransactions(data.transactions);
+      setShowHistory(true);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
 
   return (
     <div className="card card-border-gradient px-4 py-4" style={{ margin: '0 16px' }}>
@@ -106,6 +179,19 @@ export default function ProfileCard({ user, onEdit }: Props) {
                 Учитель
               </span>
             )}
+            {/* Online status */}
+            {user.lastSeenAt && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Circle 
+                  size={8} 
+                  fill={isOnline(user.lastSeenAt) ? 'var(--green)' : 'var(--text-3)'}
+                  color={isOnline(user.lastSeenAt) ? 'var(--green)' : 'var(--text-3)'}
+                />
+                <span className="caption" style={{ color: 'var(--text-3)', fontSize: 9 }}>
+                  {isOnline(user.lastSeenAt) ? 'Онлайн' : 'Оффлайн'}
+                </span>
+              </div>
+            )}
           </div>
           {user.username && (
             <div className="body-sm text-faint mt-1">@{user.username}</div>
@@ -143,6 +229,38 @@ export default function ProfileCard({ user, onEdit }: Props) {
         <StatPill label="Win rate" value={`${winRate}%`} color="var(--accent)" />
       </div>
 
+      {/* LIT row */}
+      <div
+        className="flex items-center gap-3 mt-3"
+        style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}
+      >
+        <div
+          style={{
+            flex: 1,
+            background: 'rgba(99,102,241,0.1)',
+            borderRadius: 10,
+            padding: '10px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <Zap size={16} color="#818cf8" />
+          <div>
+            <div className="caption text-faint">Баланс LIT</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#818cf8' }}>{user.litBalance}</div>
+          </div>
+        </div>
+        <button
+          onClick={loadHistory}
+          className="btn btn-ghost"
+          style={{ padding: '8px 12px', fontSize: 12 }}
+        >
+          <History size={14} />
+          История
+        </button>
+      </div>
+
       {/* Expand button */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -177,10 +295,86 @@ export default function ProfileCard({ user, onEdit }: Props) {
           >
             <div style={{ paddingTop: 8 }}>
               <LevelProgress level={user.level} />
+              
+              {/* Analytics */}
+              {analytics && (
+                <div style={{ marginTop: 16, padding: '12px', background: 'var(--surface-2)', borderRadius: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Activity size={14} />
+                    Аналитика сообщества
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    <AnalyticsStat icon={Users} label="Всего" value={analytics.totalUsers} />
+                    <AnalyticsStat icon={Globe} label="Онлайн" value={analytics.onlineUsers} />
+                    <AnalyticsStat icon={Activity} label="За день" value={analytics.dailyActiveUsers} />
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* History modal - Portal to render outside component */}
+      {showHistory && createPortal(
+        <AnimatePresence>
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={e => { if (e.target === e.currentTarget) setShowHistory(false); }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
+          >
+            <motion.div
+              className="modal-sheet"
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              style={{ maxHeight: '80vh' }}
+            >
+              <div className="modal-handle" />
+              <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+                <h2 className="title-sm">История LIT</h2>
+                <button className="btn-icon btn-ghost" onClick={() => setShowHistory(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {loadingHistory ? (
+                <div className="flex-col gap-3 flex">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="skeleton" style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div className="skeleton" style={{ height: 14, width: '60%', marginBottom: 6 }} />
+                        <div className="skeleton" style={{ height: 11, width: '40%' }} />
+                      </div>
+                      <div className="skeleton" style={{ width: 60, height: 16 }} />
+                    </div>
+                  ))}
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon"><Zap size={28} color="var(--text-3)" /></div>
+                  <div>
+                    <h3 className="title-sm">Нет транзакций</h3>
+                    <p className="body-sm text-faint mt-1">Выполняй цели и голосуй, чтобы зарабатывать LIT</p>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
+                  {transactions.map((tx, i) => (
+                    <TxRow key={tx.id} tx={tx} index={i} />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
@@ -199,6 +393,59 @@ function StatPill({ label, value, color }: { label: string; value: string | numb
       <div style={{ fontSize: 16, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2, fontWeight: 500 }}>{label}</div>
     </div>
+  );
+}
+
+function TxRow({ tx, index }: { tx: LitTransaction; index: number }) {
+  const cfg = TX_ICONS[tx.type] ?? TX_ICONS.default;
+  const Icon = cfg.icon;
+  const label = TX_LABELS[tx.type] ?? tx.note ?? tx.type;
+  const date = new Date(tx.createdAt);
+  const isPositive = tx.amount > 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.04 }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 0',
+        borderBottom: '1px solid var(--border)',
+      }}
+    >
+      <div
+        style={{
+          width: 40, height: 40,
+          borderRadius: 12,
+          background: cfg.bg,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Icon size={18} color={cfg.color} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="body-sm truncate" style={{ fontWeight: 500 }}>{label}</div>
+        <div className="caption text-faint mt-1">
+          {date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: 15,
+          fontWeight: 700,
+          color: isPositive ? 'var(--green)' : 'var(--red)',
+          flexShrink: 0,
+        }}
+      >
+        {isPositive ? '+' : ''}{tx.amount} LIT
+      </div>
+    </motion.div>
   );
 }
 

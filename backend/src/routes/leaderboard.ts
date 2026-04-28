@@ -8,6 +8,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const type = (req.query.type as string) ?? 'rating';
   const limit = 50;
 
+  console.log('Leaderboard request:', { type, userId: req.user!.userId });
+
   const orderBy =
     type === 'lit'
       ? { litBalance: 'desc' as const }
@@ -32,15 +34,32 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     take: limit,
   });
 
+  console.log('Leaderboard users found:', users.length);
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: BigInt(req.user!.userId) },
+    select: {
+      rating: true,
+      litBalance: true,
+      totalGoalsCompleted: true,
+    },
+  });
+
+  if (!currentUser) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const userValue =
+    type === 'lit'
+      ? currentUser.litBalance
+      : type === 'goals'
+      ? currentUser.totalGoalsCompleted
+      : Number(currentUser.rating);
+
   const myRank = await prisma.user.count({
     where: {
       [type === 'lit' ? 'litBalance' : type === 'goals' ? 'totalGoalsCompleted' : 'rating']: {
-        gt:
-          type === 'lit'
-            ? (await prisma.user.findUnique({ where: { id: BigInt(req.user!.userId) }, select: { litBalance: true } }))?.litBalance ?? 0
-            : type === 'goals'
-            ? (await prisma.user.findUnique({ where: { id: BigInt(req.user!.userId) }, select: { totalGoalsCompleted: true } }))?.totalGoalsCompleted ?? 0
-            : Number((await prisma.user.findUnique({ where: { id: BigInt(req.user!.userId) }, select: { rating: true } }))?.rating ?? 0),
+        gt: userValue,
       },
     },
   });

@@ -35,9 +35,9 @@ export const authApi = {
 // Users
 export const usersApi = {
   me: () => api.get<User>('/users/me'),
-  update: (data: Partial<Pick<User, 'displayName' | 'firstName' | 'lastName'>>) =>
-    api.patch<User>('/users/me', data),
+  update: (data: { displayName?: string; firstName?: string; lastName?: string }) => api.put<User>('/users/me', data),
   getById: (id: number) => api.get<User>(`/users/${id}`),
+  analytics: () => api.get<{ totalUsers: number; onlineUsers: number; dailyActiveUsers: number }>('/users/analytics'),
 };
 
 // Goals
@@ -53,13 +53,71 @@ export const goalsApi = {
     api.post(`/goals/${id}/confirm`, { confirmed, note }),
   checkin: (goalId: number, content?: string, mediaUrls?: string[]) =>
     api.post('/goals/checkin', { goalId, content, mediaUrls }),
+  delete: (id: number) => api.delete<{ success: boolean }>(`/goals/${id}`),
+};
+
+// Upload
+export const uploadApi = {
+  uploadFile: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<{ success: boolean; url: string; key: string; mimeType: string; size: number }>('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  uploadMultiple: (files: File[]) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    return api.post<{ success: boolean; files: Array<{ url: string; key: string }> }>('/upload/multiple', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+// Tasks
+export const tasksApi = {
+  list: () => api.get<Task[]>('/tasks'),
+  create: (data: { title: string; description?: string; reminderTime?: string }) => api.post<Task>('/tasks', data),
+  update: (id: number, data: { title?: string; description?: string; completed?: boolean; reminderTime?: string }) =>
+    api.put<Task>(`/tasks/${id}`, data),
+  delete: (id: number) => api.delete<{ success: boolean }>(`/tasks/${id}`),
+};
+
+// Habits
+export const habitsApi = {
+  list: () => api.get<Habit[]>('/habits'),
+  create: (data: { title: string; description?: string; targetDays: string[] }) => api.post<Habit>('/habits', data),
+  update: (id: number, data: { title?: string; description?: string; targetDays?: string[] }) => api.put<Habit>(`/habits/${id}`, data),
+  delete: (id: number) => api.delete<{ success: boolean }>(`/habits/${id}`),
+  toggle: (id: number) => api.post<{ completed: boolean }>(`/habits/${id}/toggle`),
+};
+
+// Pair Messages
+export interface PairMessage {
+  id: number;
+  content: string;
+  type: 'question' | 'improvement' | 'feedback';
+  createdAt: string;
+  sender: {
+    id: number;
+    username: string | null;
+    displayName: string | null;
+  };
+  isFromMe: boolean;
+}
+
+export const pairMessagesApi = {
+  list: () => api.get<PairMessage[]>('/pair-messages'),
+  create: (data: { content: string; type?: 'question' | 'improvement' | 'feedback' }) => api.post<PairMessage>('/pair-messages', data),
 };
 
 // Pairs
 export const pairsApi = {
   current: () => api.get<PairStatus>('/pairs/current'),
-  myStudents: () => api.get<WatcherStudent[]>('/pairs/my-students'),
+  myPartners: () => api.get<WatcherStudent[]>('/pairs/my-partners'),
   changePair: (reason: string) => api.post('/pairs/change', { reason }),
+  joinQueue: () => api.post<{ success: boolean; message: string; matched: boolean; partner?: any }>('/pairs/queue/join'),
+  leaveQueue: () => api.post<{ success: boolean; message: string }>('/pairs/queue/leave'),
 };
 
 // LIT
@@ -77,8 +135,9 @@ export const leaderboardApi = {
 // Voting
 export const votingApi = {
   next: () => api.get<{ session: VotingSession | null }>('/voting/next'),
-  vote: (id: number, scoreGoal: number, scoreWatcher: number) =>
-    api.post(`/voting/${id}/vote`, { scoreGoal, scoreWatcher }),
+  portfolio: () => api.get<{ goals: VotingSession[] }>('/voting/portfolio'),
+  vote: (sessionId: number, data: { scoreGoal: number; scoreWatcher: number }) =>
+    api.post(`/voting/${sessionId}/vote`, data),
 };
 
 // Teachers
@@ -87,17 +146,30 @@ export const teachersApi = {
     api.get<TeacherProfile[]>('/teachers', { params }),
   apply: (topic: string, description: string) =>
     api.post('/teachers/apply', { topic, description }),
+  enroll: (teacherProfileId: number) =>
+    api.post<{ success: boolean; price: number }>(`/teachers/${teacherProfileId}/enroll`),
+};
+
+// Listings
+export const listingsApi = {
+  list: (type?: string) => api.get<{ listings: Listing[] }>(`/listings${type ? `?type=${type}` : ''}`),
+  my: () => api.get<{ listings: Listing[] }>('/listings/my'),
+  create: (data: { type: string; title: string; description?: string; skills?: string[] }) =>
+    api.post<Listing>('/listings', data),
+  update: (id: number, data: { title?: string; description?: string; skills?: string[]; status?: string }) =>
+    api.put<Listing>(`/listings/${id}`, data),
+  delete: (id: number) => api.delete<{ success: boolean }>(`/listings/${id}`),
 };
 
 // Types
-export interface User {
+export type User = {
   id: number;
   telegramId: number;
-  username: string | null;
-  displayName: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  photoUrl: string | null;
+  username?: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  photoUrl?: string;
   level: number;
   rating: number;
   litBalance: number;
@@ -108,13 +180,14 @@ export interface User {
   totalGoalsCompleted: number;
   totalGoalsFailed: number;
   createdAt: string;
+  lastSeenAt?: string;
   teacherProfile?: {
-    topic: string | null;
-    description: string | null;
+    topic: string;
+    description: string;
     status: string;
     studentsCount: number;
   } | null;
-}
+};
 
 export interface Goal {
   id: number;
@@ -165,7 +238,7 @@ export interface CreateGoalDto {
 }
 
 export interface PairStatus {
-  asStudent: {
+  asPartner: {
     id: number;
     status: string;
     createdAt: string;
@@ -175,30 +248,58 @@ export interface PairStatus {
     id: number;
     status: string;
     createdAt: string;
-    student: Pick<User, 'id' | 'username' | 'displayName' | 'photoUrl' | 'level' | 'rating'>;
+    partner: Pick<User, 'id' | 'username' | 'displayName' | 'photoUrl' | 'level' | 'rating'>;
   } | null;
   inQueue: boolean;
 }
 
 export interface WatcherStudent {
   pairId: number;
-  student: Pick<User, 'id' | 'username' | 'displayName' | 'photoUrl' | 'level' | 'rating'> & {
+  partner: Pick<User, 'id' | 'username' | 'displayName' | 'photoUrl' | 'level' | 'rating'> & {
     activeGoals: Array<{
       id: number;
       title: string;
+      successCriteria: string;
       deadline: string;
       status: string;
       checkinsCount: number;
+      latestProof: { description: string; mediaUrls: string[] } | null;
     }>;
   };
 }
 
 export interface LitTransaction {
   id: number;
-  amount: number;
+  userId: number;
   type: string;
-  note: string | null;
+  amount: number;
+  note?: string;
+  relatedId?: number;
+  createdAt: Date;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  completed: boolean;
+  completedAt?: string;
+  reminderTime?: string;
+  reminderSent: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface Habit {
+  id: number;
+  title: string;
+  description?: string;
+  targetDays: string[];
+  reminderTime?: string;
+  reminderSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+  completedToday: boolean;
 }
 
 export interface LitHistory {
@@ -206,6 +307,24 @@ export interface LitHistory {
   total: number;
   page: number;
   pages: number;
+}
+
+export interface Listing {
+  id: number;
+  type: string;
+  title: string;
+  description?: string;
+  skills: string[];
+  status?: string;
+  createdAt: string;
+  user: {
+    id: number;
+    username?: string;
+    displayName?: string;
+    photoUrl?: string;
+    level: number;
+    rating: number;
+  };
 }
 
 export interface LeaderboardUser {

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User } from '../api/client';
+import type { User, Goal } from '../api/client';
 
 interface AuthState {
   token: string | null;
@@ -22,6 +22,31 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'list-auth',
       partialize: state => ({ token: state.token, user: state.user }),
+    }
+  )
+);
+
+interface GoalsState {
+  goals: Goal[];
+  setGoals: (goals: Goal[]) => void;
+  addGoal: (goal: Goal) => void;
+  updateGoal: (id: number, updates: Partial<Goal>) => void;
+  clearGoals: () => void;
+}
+
+export const useGoalsStore = create<GoalsState>()(
+  persist(
+    set => ({
+      goals: [],
+      setGoals: (goals) => set({ goals }),
+      addGoal: (goal) => set(state => ({ goals: [goal, ...state.goals] })),
+      updateGoal: (id, updates) => set(state => ({
+        goals: state.goals.map(g => g.id === id ? { ...g, ...updates } : g)
+      })),
+      clearGoals: () => set({ goals: [] }),
+    }),
+    {
+      name: 'list-goals',
     }
   )
 );

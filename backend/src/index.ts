@@ -4,7 +4,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createBot } from './bot';
 import { setBotInstance } from './services/matching';
-// import './services/queue'; // Инициализация воркеров (отключено без Redis)
+import { setBotInstance as setReminderBotInstance, checkAndSendReminders } from './services/reminders';
+import { enqueueDeadlineCheck, enqueueVotingClose } from './services/queue';
 import './lib/sentry'; // Инициализация Sentry
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
@@ -16,6 +17,10 @@ import votingRouter from './routes/voting';
 import teachersRouter from './routes/teachers';
 import reportsRouter from './routes/reports';
 import uploadRouter from './routes/upload';
+import tasksRouter from './routes/tasks';
+import habitsRouter from './routes/habits';
+import listingsRouter from './routes/listings';
+import pairMessagesRouter from './routes/pair-messages';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3000);
@@ -52,6 +57,10 @@ app.use('/api/voting', votingRouter);
 app.use('/api/teachers', teachersRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/tasks', tasksRouter);
+app.use('/api/listings', listingsRouter);
+app.use('/api/pair-messages', pairMessagesRouter);
+app.use('/api/habits', habitsRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
@@ -86,6 +95,17 @@ async function main() {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV ?? 'development'}`);
   });
+
+  // Крон: каждые 10 минут проверяем дедлайны и закрываем голосования
+  setInterval(() => {
+    enqueueDeadlineCheck().catch(console.error);
+    enqueueVotingClose().catch(console.error);
+  }, 10 * 60 * 1000);
+
+  // Крон: каждую минуту проверяем и отправляем напоминания
+  setInterval(() => {
+    checkAndSendReminders().catch(console.error);
+  }, 60 * 1000);
 }
 
 main().catch(console.error);

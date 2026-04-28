@@ -21,6 +21,12 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
   if (!user) return res.status(404).json({ error: 'User not found' });
 
+  // Update lastSeenAt
+  await prisma.user.update({
+    where: { id: BigInt(req.user!.userId) },
+    data: { lastSeenAt: new Date() },
+  });
+
   return res.json({
     id: Number(user.id),
     telegramId: Number(user.telegramId),
@@ -39,6 +45,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     totalGoalsCompleted: user.totalGoalsCompleted,
     totalGoalsFailed: user.totalGoalsFailed,
     createdAt: user.createdAt,
+    lastSeenAt: user.lastSeenAt,
     teacherProfile: user.teacherProfile
       ? {
           topic: user.teacherProfile.topic,
@@ -47,6 +54,37 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
           studentsCount: user.teacherProfile.studentsCount,
         }
       : null,
+  });
+});
+
+// Get analytics data
+router.get('/analytics', requireAuth, async (req: Request, res: Response) => {
+  const totalUsers = await prisma.user.count();
+  
+  // Get users online in last 5 minutes (using createdAt as proxy for last activity)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const onlineUsers = await prisma.user.count({
+    where: {
+      createdAt: {
+        gte: fiveMinutesAgo,
+      },
+    },
+  });
+
+  // Get daily active users (last 24 hours)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const dailyActiveUsers = await prisma.user.count({
+    where: {
+      createdAt: {
+        gte: oneDayAgo,
+      },
+    },
+  });
+
+  return res.json({
+    totalUsers,
+    onlineUsers,
+    dailyActiveUsers,
   });
 });
 

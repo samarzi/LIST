@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import { Target, Eye, Trophy, Zap, Vote } from 'lucide-react';
+import { Target, Eye, Trophy, Zap, BookOpen } from 'lucide-react';
 import { useUIStore } from '../store';
 
 const tabs = [
-  { id: 'goals',       label: 'Цели',     icon: Target },
-  { id: 'watch',       label: 'Слежу',    icon: Eye },
+  { id: 'path',        label: 'Путь',     icon: Target },
+  { id: 'helper',      label: 'Хелпер',   icon: Eye },
   { id: 'leaderboard', label: 'Рейтинг',  icon: Trophy },
-  { id: 'lit',         label: 'LIT',      icon: Zap },
-  { id: 'voting',      label: 'Голосовать', icon: Vote },
+  { id: 'teachers',    label: 'Поиск',    icon: BookOpen },
+  { id: 'profile',     label: 'Профиль',  icon: Zap },
 ];
 
 export default function BottomNav() {

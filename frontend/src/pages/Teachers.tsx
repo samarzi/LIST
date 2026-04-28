@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Star, Users, Zap, X, ChevronRight } from 'lucide-react';
+import { BookOpen, Star, Users, Zap, X, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { teachersApi, type TeacherProfile } from '../api/client';
 import { useAuthStore } from '../store';
 
@@ -34,7 +34,7 @@ export default function TeachersPage() {
       <div className="px-4" style={{ paddingTop: 24, paddingBottom: 12 }}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="title-lg">Учителя</h1>
+            <h1 className="title-lg text-gradient">Учителя</h1>
             <p className="body-sm text-faint mt-1">{teachers.length} доступн{teachers.length === 1 ? 'о' : 'о'}</p>
           </div>
           {canApply && (
@@ -85,7 +85,11 @@ export default function TeachersPage() {
       {/* Teacher detail */}
       <AnimatePresence>
         {selected && (
-          <TeacherDetailModal teacher={selected} onClose={() => setSelected(null)} />
+          <TeacherDetailModal
+            teacher={selected}
+            onClose={() => setSelected(null)}
+            onEnrolled={() => { setSelected(null); loadTeachers(); }}
+          />
         )}
       </AnimatePresence>
 
@@ -174,8 +178,28 @@ function TeacherCard({ teacher, index, onClick }: { teacher: TeacherProfile; ind
   );
 }
 
-function TeacherDetailModal({ teacher, onClose }: { teacher: TeacherProfile; onClose: () => void }) {
+function TeacherDetailModal({ teacher, onClose, onEnrolled }: { teacher: TeacherProfile; onClose: () => void; onEnrolled: () => void }) {
   const name = teacher.user.displayName ?? teacher.user.username ?? 'Учитель';
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrolled, setEnrolled] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function handleEnroll() {
+    setEnrolling(true);
+    setErr('');
+    try {
+      await teachersApi.enroll(teacher.id);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      setEnrolled(true);
+      onEnrolled();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Ошибка записи';
+      setErr(msg);
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
   return (
     <motion.div
       className="modal-overlay"
@@ -217,19 +241,33 @@ function TeacherDetailModal({ teacher, onClose }: { teacher: TeacherProfile; onC
           <StatBubble label="Рейтинг" value={teacher.user.rating.toFixed(1)} color="var(--yellow)" />
         </div>
 
+        {err && (
+          <div style={{ fontSize: 13, color: 'var(--red)', marginBottom: 12, padding: '8px 12px', background: 'rgba(255,69,58,0.08)', borderRadius: 8 }}>
+            {err}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button className="btn btn-ghost" style={{ flex: 0.4 }} onClick={onClose}>Закрыть</button>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1 }}
-            onClick={() => {
-              window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-              onClose();
-            }}
-          >
-            <Zap size={16} />
-            Записаться · {teacher.user.price === 0 ? 'Бесплатно' : `${teacher.user.price} LIT`}
-          </button>
+          {enrolled ? (
+            <div
+              className="btn"
+              style={{ flex: 1, background: 'rgba(48,209,88,0.12)', color: 'var(--green)', border: '1px solid rgba(48,209,88,0.3)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              <CheckCircle2 size={16} />
+              Записан!
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={handleEnroll}
+              disabled={enrolling}
+            >
+              <Zap size={16} />
+              {enrolling ? 'Записываю...' : `Записаться · ${teacher.user.price === 0 ? 'Бесплатно' : `${teacher.user.price} LIT`}`}
+            </button>
+          )}
         </div>
       </motion.div>
     </motion.div>

@@ -2,8 +2,8 @@ import Redis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-// Создаём Redis клиент только если REDIS_URL настроен и не в тестовом режиме
-const shouldConnect = process.env.REDIS_URL && process.env.NODE_ENV !== 'test' && process.env.REDIS_AVAILABLE !== 'false';
+// Создаём Redis клиент если не в тестовом режиме и Redis не отключен явно
+const shouldConnect = process.env.NODE_ENV !== 'test' && process.env.REDIS_AVAILABLE !== 'false';
 
 export const redis = shouldConnect
   ? new Redis(redisUrl, {

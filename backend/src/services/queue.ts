@@ -168,11 +168,114 @@ export const litWorker = isRedisAvailable ? new Worker(
   { connection: redis }
 ) : null;
 
+export const votingQueue = isRedisAvailable ? new Queue('voting', { connection: redis }) : null;
+
+/**
+ * Воркер закрытия голосований — считает медиану, начисляет LIT, обновляет статус цели
+ */
+export const votingWorker = isRedisAvailable ? new Worker(
+  'voting',
+  async (_job: Job) => {
+    const now = new Date();
+
+    const expiredSessions = await prisma.votingSession.findMany({
+      where: { status: 'open', deadline: { lt: now } },
+      include: {
+        goal: { include: { pair: true, user: true } },
+      },
+    });
+
+    for (const session of expiredSessions) {
+      const votes = await prisma.vote.findMany({ where: { goalId: session.goalId } });
+
+      if (votes.length < session.requiredVotes) {
+        await prisma.votingSession.update({
+          where: { id: session.id },
+          data: { status: 'cancelled' },
+        });
+        await prisma.goal.update({
+          where: { id: session.goalId },
+          data: { status: 'in_progress' },
+        });
+        continue;
+      }
+
+      const sortedGoal = votes.map(v => v.scoreGoal).sort((a, b) => a - b);
+      const sortedWatcher = votes.map(v => v.scoreWatcher).sort((a, b) => a - b);
+      const mid = Math.floor(sortedGoal.length / 2);
+      const medianGoal = sortedGoal.length % 2 === 0
+        ? (sortedGoal[mid - 1] + sortedGoal[mid]) / 2
+        : sortedGoal[mid];
+      const medianWatcher = sortedWatcher.length % 2 === 0
+        ? (sortedWatcher[mid - 1] + sortedWatcher[mid]) / 2
+        : sortedWatcher[mid];
+
+      const passed = medianGoal >= 5;
+
+      await prisma.votingSession.update({
+        where: { id: session.id },
+        data: { status: 'closed', medianGoal, medianWatcher, closedAt: now },
+      });
+
+      await prisma.goal.update({
+        where: { id: session.goalId },
+        data: {
+          status: passed ? 'completed' : 'not_completed',
+          completedAt: now,
+        },
+      });
+
+      if (passed) {
+        await prisma.user.update({
+          where: { id: session.goal.userId },
+          data: { totalGoalsCompleted: { increment: 1 }, rating: { increment: 0.1 } },
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: session.goal.userId },
+          data: { totalGoalsFailed: { increment: 1 }, rating: { decrement: 0.05 } },
+        });
+      }
+
+      if (litQueue) {
+        await litQueue.add('calculate-lit', {
+          goalId: session.goalId,
+          medianGoal,
+          medianWatcher,
+        }, { attempts: 3 });
+      }
+
+      // Бонус LIT голосовавшим, чья оценка близка к медиане
+      for (const vote of votes) {
+        const diffGoal = Math.abs(vote.scoreGoal - medianGoal);
+        const diffWatcher = Math.abs(vote.scoreWatcher - medianWatcher);
+        if (diffGoal <= 1 && diffWatcher <= 1) {
+          await prisma.user.update({ where: { id: vote.voterId }, data: { litBalance: { increment: 2 } } });
+          await prisma.litTransaction.create({
+            data: { userId: vote.voterId, amount: 2, type: 'vote_reward', note: 'Точный голос' },
+          });
+        }
+      }
+
+      if (notificationsQueue) {
+        await notificationsQueue.add('vote-result', {
+          telegramId: session.goal.user.telegramId,
+          text: passed
+            ? `✅ *Голосование завершено!*\n\nЦель "${session.goal.title}" *выполнена*!\n\nОценка: ${medianGoal.toFixed(1)}/10 — LIT начислен.`
+            : `❌ *Голосование завершено*\n\nЦель "${session.goal.title}" не набрала достаточно голосов.\n\nОценка: ${medianGoal.toFixed(1)}/10`,
+        });
+      }
+    }
+  },
+  { connection: redis }
+) : null;
+
 // Обработка ошибок воркеров
 if (matchingWorker) matchingWorker.on('error', (err: Error) => console.error('Matching worker error:', err));
 if (notificationsWorker) notificationsWorker.on('error', (err: Error) => console.error('Notifications worker error:', err));
 if (deadlinesWorker) deadlinesWorker.on('error', (err: Error) => console.error('Deadlines worker error:', err));
 if (litWorker) litWorker.on('error', (err: Error) => console.error('LIT worker error:', err));
+if (votingWorker) votingWorker.on('error', (err: Error) => console.error('Voting worker error:', err));
 
 /**
  * Добавляет задачу на матчинг для конкретного пользователя
@@ -212,4 +315,12 @@ export async function enqueueDeadlineCheck() {
 export async function enqueueLitCalculation(goalId: bigint, medianGoal: number, medianWatcher: number) {
   if (!litQueue) return;
   await litQueue.add('calculate-lit', { goalId, medianGoal, medianWatcher }, { attempts: 3 });
+}
+
+/**
+ * Запускает закрытие просроченных голосований
+ */
+export async function enqueueVotingClose() {
+  if (!votingQueue) return;
+  await votingQueue.add('close-voting', {}, { attempts: 3 });
 }

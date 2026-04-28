@@ -9,9 +9,9 @@ const router = Router();
 router.get('/current', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
 
-  const [asStudent, asWatcher] = await Promise.all([
+  const [asPartner, asWatcher] = await Promise.all([
     prisma.pair.findFirst({
-      where: { studentId: userId, status: 'active' },
+      where: { partnerId: userId, status: 'active' },
       include: {
         watcher: { select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true } },
       },
@@ -19,18 +19,18 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     prisma.pair.findFirst({
       where: { watcherId: userId, status: 'active' },
       include: {
-        student: { select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true } },
+        partner: { select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true } },
       },
     }),
   ]);
 
   return res.json({
-    asStudent: asStudent
+    asPartner: asPartner
       ? {
-          id: Number(asStudent.id),
-          status: asStudent.status,
-          createdAt: asStudent.createdAt,
-          watcher: { ...asStudent.watcher, id: Number(asStudent.watcher.id), rating: Number(asStudent.watcher.rating) },
+          id: Number(asPartner.id),
+          status: asPartner.status,
+          createdAt: asPartner.createdAt,
+          watcher: { ...asPartner.watcher, id: Number(asPartner.watcher.id), rating: Number(asPartner.watcher.rating) },
         }
       : null,
     asWatcher: asWatcher
@@ -38,10 +38,10 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
           id: Number(asWatcher.id),
           status: asWatcher.status,
           createdAt: asWatcher.createdAt,
-          student: { ...asWatcher.student, id: Number(asWatcher.student.id), rating: Number(asWatcher.student.rating) },
+          partner: { ...asWatcher.partner, id: Number(asWatcher.partner.id), rating: Number(asWatcher.partner.rating) },
         }
       : null,
-    inQueue: !asStudent && !asWatcher,
+    inQueue: !asPartner && !asWatcher,
   });
 });
 
@@ -52,14 +52,14 @@ router.post('/change', requireAuth, async (req: Request, res: Response) => {
   if (!reason) return res.status(400).json({ error: 'Reason required' });
 
   const pair = await prisma.pair.findFirst({
-    where: { studentId: userId, status: 'active' },
+    where: { partnerId: userId, status: 'active' },
   });
   if (!pair) return res.status(404).json({ error: 'No active pair' });
 
   // Проверка: не чаще 1 раза в 2 недели
   const recentEnd = await prisma.pair.findFirst({
     where: {
-      studentId: userId,
+      partnerId: userId,
       status: 'ended',
       endedAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
     },
@@ -76,21 +76,22 @@ router.post('/change', requireAuth, async (req: Request, res: Response) => {
   return res.json({ success: true, message: 'Pair ended, searching for new partner' });
 });
 
-// Студенты смотрящего (для страницы "Слежу")
-router.get('/my-students', requireAuth, async (req: Request, res: Response) => {
+// Партнёры смотрящего (для страницы "Хелпер")
+router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
 
   const pairs = await prisma.pair.findMany({
     where: { watcherId: userId, status: 'active' },
     include: {
-      student: {
+      partner: {
         select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true },
         include: {
           goals: {
-            where: { status: 'in_progress' },
+            where: { status: { in: ['in_progress', 'on_review', 'on_check', 'on_voting'] } },
             select: {
-              id: true, title: true, deadline: true, status: true,
+              id: true, title: true, deadline: true, status: true, successCriteria: true,
               _count: { select: { checkins: true } },
+              proofs: { orderBy: { submittedAt: 'desc' }, take: 1, select: { description: true, mediaUrls: true } },
             },
           },
         },
@@ -100,16 +101,24 @@ router.get('/my-students', requireAuth, async (req: Request, res: Response) => {
 
   return res.json(pairs.map(p => ({
     pairId: Number(p.id),
-    student: {
-      ...p.student,
-      id: Number(p.student.id),
-      rating: Number(p.student.rating),
-      activeGoals: (p.student as unknown as { goals: { id: bigint; title: string; deadline: Date; status: string; _count: { checkins: number } }[] }).goals.map((g) => ({
+    partner: {
+      ...p.partner,
+      id: Number(p.partner.id),
+      rating: Number(p.partner.rating),
+      activeGoals: (p.partner as unknown as {
+        goals: {
+          id: bigint; title: string; deadline: Date; status: string; successCriteria: string;
+          _count: { checkins: number };
+          proofs: { description: string; mediaUrls: string[] }[];
+        }[]
+      }).goals.map((g) => ({
         id: Number(g.id),
         title: g.title,
+        successCriteria: g.successCriteria,
         deadline: g.deadline,
         status: g.status,
         checkinsCount: g._count.checkins,
+        latestProof: g.proofs[0] ?? null,
       })),
     },
   })));
@@ -186,6 +195,52 @@ router.post('/inactivity/return', requireAuth, async (req: Request, res: Respons
   }
 
   return res.json({ success: true, message: result.message });
+});
+
+// Смена партнера/смотрящего
+router.post('/change', requireAuth, async (req: Request, res: Response) => {
+  const userId = BigInt(req.user!.userId);
+  const { reason } = req.body;
+
+  if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+    return res.status(400).json({ error: 'Укажите причину смены' });
+  }
+
+  // Проверяем, есть ли активная пара
+  const currentPair = await prisma.pair.findFirst({
+    where: {
+      OR: [
+        { partnerId: userId, status: 'active' },
+        { watcherId: userId, status: 'active' },
+      ],
+    },
+  });
+
+  if (!currentPair) {
+    return res.status(404).json({ error: 'Нет активной пары' });
+  }
+
+  // Проверяем cooldown (2 недели)
+  const twoWeeksAgo = new Date();
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+  if (currentPair.createdAt > twoWeeksAgo) {
+    return res.status(400).json({ error: 'Смену партнера можно раз в 2 недели' });
+  }
+
+  // Завершаем текущую пару
+  await prisma.pair.update({
+    where: { id: currentPair.id },
+    data: {
+      status: 'ended',
+      endedAt: new Date(),
+    },
+  });
+
+  // Добавляем пользователя в очередь поиска нового партнера
+  await joinMatchingQueue(userId);
+
+  return res.json({ success: true, message: 'Пара завершена, вы добавлены в очередь поиска' });
 });
 
 export default router;

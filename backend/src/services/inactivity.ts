@@ -48,13 +48,13 @@ async function isPairActive(pairId: bigint): Promise<boolean> {
 /**
  * Находит неактивные пары
  */
-export async function findInactivePairs(): Promise<Array<{ pairId: bigint; watcherId: bigint; studentId: bigint }>> {
+export async function findInactivePairs(): Promise<Array<{ pairId: bigint; watcherId: bigint; partnerId: bigint }>> {
   const pairs = await prisma.pair.findMany({
     where: { status: 'active' },
-    select: { id: true, watcherId: true, studentId: true },
+    select: { id: true, watcherId: true, partnerId: true },
   });
 
-  const inactivePairs: Array<{ pairId: bigint; watcherId: bigint; studentId: bigint }> = [];
+  const inactivePairs: Array<{ pairId: bigint; watcherId: bigint; partnerId: bigint }> = [];
 
   for (const pair of pairs) {
     const active = await isPairActive(pair.id);
@@ -62,7 +62,7 @@ export async function findInactivePairs(): Promise<Array<{ pairId: bigint; watch
       inactivePairs.push({
         pairId: pair.id,
         watcherId: pair.watcherId,
-        studentId: pair.studentId,
+        partnerId: pair.partnerId,
       });
     }
   }
@@ -159,7 +159,7 @@ export async function replacePartner(
   });
 
   if (pair) {
-    const activeUserId = pair.watcherId === inactiveUserId ? pair.studentId : pair.watcherId;
+    const activeUserId = pair.watcherId === inactiveUserId ? pair.partnerId : pair.watcherId;
     const { joinMatchingQueue } = await import('./matching');
     await joinMatchingQueue(activeUserId);
   }
@@ -173,11 +173,11 @@ export async function checkAllPairsForInactivity(): Promise<{ checked: number; f
   const inactivePairs = await findInactivePairs();
   let frozenCount = 0;
 
-  for (const { pairId, watcherId, studentId } of inactivePairs) {
+  for (const { pairId, watcherId, partnerId } of inactivePairs) {
     // Проверяем, кто был активен последним
     const threeDaysAgo = new Date(Date.now() - INACTIVITY_THRESHOLD_MS);
 
-    const [watcherActivity, studentActivity] = await Promise.all([
+    const [watcherActivity, partnerActivity] = await Promise.all([
       prisma.checkin.findFirst({
         where: {
           goal: { pairId },
@@ -188,15 +188,15 @@ export async function checkAllPairsForInactivity(): Promise<{ checked: number; f
       prisma.checkin.findFirst({
         where: {
           goal: { pairId },
-          userId: studentId,
+          userId: partnerId,
           createdAt: { gte: threeDaysAgo },
         },
       }),
     ]);
 
     // Определяем неактивного пользователя
-    const inactiveUserId = watcherActivity ? studentId : studentActivity ? watcherId : studentId;
-    const activeUserId = inactiveUserId === watcherId ? studentId : watcherId;
+    const inactiveUserId = watcherActivity ? partnerId : partnerActivity ? watcherId : partnerId;
+    const activeUserId = inactiveUserId === watcherId ? partnerId : watcherId;
 
     // Отправляем уведомление активному партнёру
     const activeUser = await prisma.user.findUnique({
@@ -269,7 +269,7 @@ export async function returnFromFreeze(userId: bigint): Promise<{ success: boole
     where: {
       OR: [
         { watcherId: userId, status: 'frozen' },
-        { studentId: userId, status: 'frozen' },
+        { partnerId: userId, status: 'frozen' },
       ],
     },
   });
@@ -282,9 +282,9 @@ export async function returnFromFreeze(userId: bigint): Promise<{ success: boole
   await unfreezePair(pair.id);
 
   // Отправляем уведомление партнёру
-  const partnerId = pair.watcherId === userId ? pair.studentId : pair.watcherId;
+  const otherPartnerId = pair.watcherId === userId ? pair.partnerId : pair.watcherId;
   const partner = await prisma.user.findUnique({
-    where: { id: partnerId },
+    where: { id: otherPartnerId },
   });
 
   if (partner) {

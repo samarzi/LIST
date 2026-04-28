@@ -22,12 +22,12 @@ const DifficultySchema = z.object({
 
 const ProofSchema = z.object({
   description: z.string().min(10).max(1000),
-  mediaUrls: z.array(z.string().url()).max(10).optional(),
+  mediaUrls: z.array(z.string().url()).max(6).optional(),
 });
 
 const CheckinSchema = z.object({
   content: z.string().max(1000).optional(),
-  mediaUrls: z.array(z.string().url()).max(5).optional(),
+  mediaUrls: z.array(z.string().url()).max(6).optional(),
   goalId: z.number().int(),
 });
 
@@ -41,6 +41,8 @@ function serializeGoal(g: Record<string, unknown>) {
 }
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
+  console.log('Fetching goals for user:', req.user!.userId, 'telegramId:', req.user!.telegramId);
+  
   const goals = await prisma.goal.findMany({
     where: { userId: BigInt(req.user!.userId) },
     include: {
@@ -49,6 +51,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  console.log('Found goals:', goals.length);
 
   return res.json(goals.map(g => ({
     id: Number(g.id),
@@ -71,12 +75,16 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   const parsed = CreateGoalSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  console.log('Creating goal for user:', req.user!.userId, 'telegramId:', req.user!.telegramId);
+
   const activePair = await prisma.pair.findFirst({
     where: {
-      studentId: BigInt(req.user!.userId),
+      partnerId: BigInt(req.user!.userId),
       status: 'active',
     },
   });
+
+  console.log('Active pair:', activePair ? activePair.id : 'none');
 
   const goal = await prisma.goal.create({
     data: {
@@ -92,6 +100,8 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       status: activePair ? 'on_review' : 'in_progress',
     },
   });
+
+  console.log('Goal created:', { id: goal.id, userId: goal.userId, status: goal.status });
 
   return res.status(201).json({ id: Number(goal.id), status: goal.status });
 });
@@ -114,7 +124,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 
   const isOwner = Number(goal.userId) === req.user!.userId;
   const activePair = isOwner ? null : await prisma.pair.findFirst({
-    where: { watcherId: BigInt(req.user!.userId), studentId: goal.userId, status: 'active' },
+    where: { watcherId: BigInt(req.user!.userId), partnerId: goal.userId, status: 'active' },
   });
   const canView = isOwner || !!activePair;
   if (!canView) return res.status(403).json({ error: 'Forbidden' });
@@ -261,6 +271,24 @@ router.post('/checkin', requireAuth, async (req: Request, res: Response) => {
   });
 
   return res.status(201).json({ id: Number(checkin.id) });
+});
+
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+  const goalId = Number(req.params.id);
+
+  const goal = await prisma.goal.findUnique({
+    where: { id: BigInt(goalId) },
+  });
+
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+  if (Number(goal.userId) !== req.user!.userId) return res.status(403).json({ error: 'Forbidden' });
+  if (goal.status === 'completed') return res.status(400).json({ error: 'Cannot delete completed goal' });
+
+  await prisma.goal.delete({
+    where: { id: BigInt(goalId) },
+  });
+
+  return res.json({ success: true });
 });
 
 export default router;

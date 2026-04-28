@@ -36,8 +36,14 @@ async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser)
   const previousPair = await prisma.pair.findFirst({
     where: {
       OR: [
-        { watcherId: user1.id, studentId: user2.id },
-        { watcherId: user2.id, studentId: user1.id },
+        { 
+          watcherId: user1.id, 
+          partnerId: user2.id 
+        },
+        { 
+          watcherId: user2.id, 
+          partnerId: user1.id 
+        },
       ],
     },
   });
@@ -53,32 +59,40 @@ async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser)
  * Добавляет пользователя в очередь матчинга
  */
 export async function joinMatchingQueue(userId: bigint): Promise<{ success: boolean; message: string }> {
-  // Проверяем, есть ли уже активная пара
-  const existingPair = await prisma.pair.findFirst({
-    where: {
-      OR: [
-        { watcherId: userId, status: 'active' },
-        { studentId: userId, status: 'active' },
-      ],
-    },
-  });
+  console.log('joinMatchingQueue called for userId:', userId);
+  
+  try {
+    // Проверяем, есть ли уже активная пара как партнер (нельзя быть партнером дважды)
+    const existingPartnerPair = await prisma.pair.findFirst({
+      where: {
+        partnerId: userId,
+        status: 'active',
+      },
+    });
 
-  if (existingPair) {
-    return { success: false, message: 'У вас уже есть активная пара' };
+    if (existingPartnerPair) {
+      console.log('User already has partner pair:', userId);
+      return { success: false, message: 'Вы уже партнер в активной паре' };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      console.log('User not found:', userId);
+      return { success: false, message: 'Пользователь не найден' };
+    }
+
+    // Добавляем в Redis для быстрого доступа
+    await redis.set(`matching:user:${userId}`, '1', 'EX', 3600); // 1 час
+    console.log('User added to queue:', userId);
+
+    return { success: true, message: 'Вы добавлены в очередь поиска партнёра' };
+  } catch (error) {
+    console.error('Error in joinMatchingQueue:', error);
+    return { success: false, message: 'Ошибка при добавлении в очередь' };
   }
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    return { success: false, message: 'Пользователь не найден' };
-  }
-
-  // Добавляем в Redis для быстрого доступа
-  await redis.set(`matching:user:${userId}`, '1', 'EX', 3600); // 1 час
-
-  return { success: true, message: 'Вы добавлены в очередь поиска партнёра' };
 }
 
 /**
@@ -90,92 +104,110 @@ export async function leaveMatchingQueue(userId: bigint): Promise<void> {
 
 /**
  * Получает пользователей, ожидающих матчинга
- * Для MVP: находим пользователей без активной пары
+ * Пользователи без активной пары как партнер (могут быть смотрящими для других)
  */
 async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
-  const users = await prisma.user.findMany({
-    where: {
-      // Нет активной пары как смотрящий
-      watcherPairs: {
-        none: { status: 'active' },
-      },
-      // Нет активной пары как ученик
-      studentPairs: {
-        none: { status: 'active' },
-      },
-    },
-    select: {
-      id: true,
-      telegramId: true,
-      username: true,
-      displayName: true,
-      level: true,
-      rating: true,
-    },
-    take: 100, // Ограничиваем для производительности
-  });
+  try {
+    // Сначала получаем всех пользователей в Redis очереди
+    const keys = await redis.keys('matching:user:*');
+    console.log('Redis keys found:', keys.length);
+    const userIdsInQueue = keys.map(key => BigInt(key.replace('matching:user:', '')));
 
-  return users.map(u => ({
-    ...u,
-    rating: Number(u.rating),
-  }));
+    if (userIdsInQueue.length === 0) {
+      console.log('No users in queue');
+      return [];
+    }
+
+    // Получаем всех пользователей в очереди
+    const users = await prisma.user.findMany({
+      where: {
+        id: { in: userIdsInQueue },
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        username: true,
+        displayName: true,
+        level: true,
+        rating: true,
+      },
+      take: 100, // Ограничиваем для производительности
+    });
+
+    console.log('Users fetched from DB:', users.length);
+
+    // Фильтруем тех, у кого нет активной пары как партнер
+    const usersWithoutPartnerPair: MatchingQueueUser[] = [];
+    
+    for (const user of users) {
+      const hasPartnerPair = await prisma.pair.findFirst({
+        where: {
+          partnerId: user.id,
+          status: 'active',
+        },
+      });
+      
+      if (!hasPartnerPair) {
+        usersWithoutPartnerPair.push({
+          ...user,
+          rating: Number(user.rating),
+        });
+      }
+    }
+
+    console.log('Users without partner pair:', usersWithoutPartnerPair.length);
+    return usersWithoutPartnerPair;
+  } catch (error) {
+    console.error('Error in getWaitingUsers:', error);
+    return [];
+  }
 }
 
 /**
  * Создаёт пару между двумя пользователями
- * Асимметричная пара: каждый является смотрящим для другого
+ * Асимметричная пара: partner — партнер, watcher — смотрящий
+ * Смотрящий остается в очереди как потенциальный партнер
  */
-async function createPair(user1: MatchingQueueUser, user2: MatchingQueueUser) {
-  // Создаём две пары (асимметричные)
-  await prisma.$transaction([
-    // Пользователь 1 — смотрящий для пользователя 2
-    prisma.pair.create({
-      data: {
-        watcherId: user1.id,
-        studentId: user2.id,
-        status: 'active',
-      },
-    }),
-    // Пользователь 2 — смотрящий для пользователя 1
-    prisma.pair.create({
-      data: {
-        watcherId: user2.id,
-        studentId: user1.id,
-        status: 'active',
-      },
-    }),
-  ]);
+async function createPair(partner: MatchingQueueUser, watcher: MatchingQueueUser) {
+  // Создаём одну пару: watcher смотрит за partner
+  await prisma.pair.create({
+    data: {
+      watcherId: watcher.id,
+      partnerId: partner.id,
+      status: 'active',
+    },
+  });
 
-  // Удаляем из очереди матчинга
-  await redis.del(`matching:user:${user1.id}`);
-  await redis.del(`matching:user:${user2.id}`);
+  // Удаляем только партнера из очереди матчинга
+  // Смотрящий остается в очереди как потенциальный партнер
+  await redis.del(`matching:user:${partner.id}`);
 
   // Отправляем уведомления обоим пользователям
   if (botInstance) {
-    const name1 = user1.displayName ?? user1.username ?? 'Партнёр';
-    const name2 = user2.displayName ?? user2.username ?? 'Партнёр';
-    const username1 = user1.username ? `@${user1.username}` : 'нет username';
-    const username2 = user2.username ? `@${user2.username}` : 'нет username';
+    const partnerName = partner.displayName ?? partner.username ?? 'Партнёр';
+    const watcherName = watcher.displayName ?? watcher.username ?? 'Партнёр';
+    const partnerUsername = partner.username ? `@${partner.username}` : 'нет username';
+    const watcherUsername = watcher.username ? `@${watcher.username}` : 'нет username';
 
-    // Уведомление для пользователя 1
+    // Уведомление для партнера
     await botInstance.telegram.sendMessage(
-      Number(user1.telegramId),
-      `🎉 *Найден партнёр!*\n\n` +
-      `Твой смотрящий: ${name2}\n` +
-      `Telegram: ${username2}\n` +
-      `Уровень: ${user2.level}\n\n` +
+      Number(partner.telegramId),
+      `🎉 *Найден смотрящий!*\n\n` +
+      `Твой смотрящий: ${watcherName}\n` +
+      `Telegram: ${watcherUsername}\n` +
+      `Уровень: ${watcher.level}\n\n` +
       `Свяжись с партнёром и начните работу!`,
       { parse_mode: 'Markdown' }
     );
 
-    // Уведомление для пользователя 2
+    // Уведомление для смотрящего
     await botInstance.telegram.sendMessage(
-      Number(user2.telegramId),
-      `🎉 *Найден партнёр!*\n\n` +
-      `Твой смотрящий: ${name1}\n` +
-      `Telegram: ${username1}\n` +
-      `Уровень: ${user1.level}\n\n` +
-      `Свяжись с партнёром и начните работу!`,
+      Number(watcher.telegramId),
+      `🎉 *Ты назначен смотрящим!*\n\n` +
+      `Твой партнер: ${partnerName}\n` +
+      `Telegram: ${partnerUsername}\n` +
+      `Уровень: ${partner.level}\n\n` +
+      `Ты остаешься в очереди поиска своего партнера.`,
       { parse_mode: 'Markdown' }
     );
   }
@@ -183,7 +215,8 @@ async function createPair(user1: MatchingQueueUser, user2: MatchingQueueUser) {
 
 /**
  * Основная функция матчинга
- * Берёт пользователей из очереди и создаёт пары
+ * FIFO логика: первый в очереди - партнер, второй - смотрящий
+ * Смотрящий остается в очереди как потенциальный партнер
  */
 export async function runMatching(): Promise<{ pairsCreated: number }> {
   const waitingUsers = await getWaitingUsers();
@@ -193,24 +226,31 @@ export async function runMatching(): Promise<{ pairsCreated: number }> {
   }
 
   let pairsCreated = 0;
-  const matched = new Set<bigint>();
 
-  // Простой алгоритм: проходим по списку и ищем совместимых пар
-  for (let i = 0; i < waitingUsers.length; i++) {
-    if (matched.has(waitingUsers[i].id)) continue;
+  // FIFO: проходим по очереди по порядку
+  for (let i = 0; i < waitingUsers.length - 1; i++) {
+    const partner = waitingUsers[i];
+    const watcher = waitingUsers[i + 1];
 
-    for (let j = i + 1; j < waitingUsers.length; j++) {
-      if (matched.has(waitingUsers[j].id)) continue;
+    // Проверяем, что партнер еще не в паре
+    const partnerHasPair = await prisma.pair.findFirst({
+      where: {
+        partnerId: partner.id,
+        status: 'active',
+      },
+    });
 
-      const compatible = await areCompatible(waitingUsers[i], waitingUsers[j]);
-      
-      if (compatible) {
-        await createPair(waitingUsers[i], waitingUsers[j]);
-        matched.add(waitingUsers[i].id);
-        matched.add(waitingUsers[j].id);
-        pairsCreated++;
-        break; // Переходим к следующему пользователю
-      }
+    if (partnerHasPair) continue;
+
+    // Проверяем совместимость
+    const compatible = await areCompatible(partner, watcher);
+    
+    if (compatible) {
+      // Создаем пару: partner - партнер, watcher - смотрящий
+      await createPair(partner, watcher);
+      pairsCreated++;
+      // Смотрящий остается в очереди как потенциальный партнер
+      // Партнер удаляется из очереди (в createPair)
     }
   }
 
@@ -220,37 +260,72 @@ export async function runMatching(): Promise<{ pairsCreated: number }> {
 /**
  * Проверяет и создаёт пары для конкретного пользователя
  * Используется сразу после входа в очередь
+ * FIFO логика: если есть кто-то в очереди раньше - он партнер, этот пользователь смотрящий
  */
-export async function matchUser(userId: bigint): Promise<{ matched: boolean; partner?: MatchingQueueUser }> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      telegramId: true,
-      username: true,
-      displayName: true,
-      level: true,
-      rating: true,
-    },
-  });
+export async function matchUser(userId: bigint): Promise<{ matched: boolean; partner?: MatchingQueueUser; role?: 'partner' | 'watcher' }> {
+  console.log('matchUser called for userId:', userId);
+  
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        telegramId: true,
+        username: true,
+        displayName: true,
+        level: true,
+        rating: true,
+      },
+    });
 
-  if (!user) {
+    if (!user) {
+      console.log('User not found:', userId);
+      return { matched: false };
+    }
+
+    const waitingUsers = await getWaitingUsers();
+    console.log('Waiting users:', waitingUsers.length);
+    const userData = { ...user, rating: Number(user.rating) };
+
+    // Если пользователь первый в очереди - нет партнера
+    if (waitingUsers.length === 0 || waitingUsers[0].id === userId) {
+      console.log('User is first in queue or queue is empty');
+      return { matched: false };
+    }
+
+    // Если пользователь не первый - ищем того, кто перед ним
+    for (const otherUser of waitingUsers) {
+      if (otherUser.id === userId) continue;
+      
+      console.log('Checking compatibility with user:', otherUser.id);
+      
+      // Проверяем, что otherUser еще не имеет партнера
+      const otherHasPartner = await prisma.pair.findFirst({
+        where: {
+          partnerId: otherUser.id,
+          status: 'active',
+        },
+      });
+
+      if (otherHasPartner) {
+        console.log('User already has partner:', otherUser.id);
+        continue;
+      }
+
+      const compatible = await areCompatible(userData, otherUser);
+      console.log('Compatibility result:', compatible);
+      
+      if (compatible) {
+        // otherUser - партнер, userData - смотрящий
+        console.log('Creating pair: partner=', otherUser.id, 'watcher=', userData.id);
+        await createPair(otherUser, userData);
+        return { matched: true, partner: otherUser, role: 'watcher' };
+      }
+    }
+
+    return { matched: false };
+  } catch (error) {
+    console.error('Error in matchUser:', error);
     return { matched: false };
   }
-
-  const waitingUsers = await getWaitingUsers();
-  const userData = { ...user, rating: Number(user.rating) };
-
-  for (const otherUser of waitingUsers) {
-    if (otherUser.id === userId) continue;
-
-    const compatible = await areCompatible(userData, otherUser);
-    
-    if (compatible) {
-      await createPair(userData, otherUser);
-      return { matched: true, partner: otherUser };
-    }
-  }
-
-  return { matched: false };
 }

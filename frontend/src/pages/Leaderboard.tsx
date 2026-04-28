@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Trophy, Star, Zap, Target, Crown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Trophy, Star, Zap, Target, Crown, Info, X } from 'lucide-react';
 import { leaderboardApi, type LeaderboardUser } from '../api/client';
 import { useAuthStore } from '../store';
 
@@ -16,12 +16,18 @@ export default function LeaderboardPage() {
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     leaderboardApi.get(type).then(({ data }) => {
-      setUsers(data.users);
+      console.log('Leaderboard data:', data);
+      setUsers(data.users || []);
       setMyRank(data.myRank);
+    }).catch(err => {
+      console.error('Failed to load leaderboard:', err);
+      setUsers([]);
+      setMyRank(null);
     }).finally(() => setLoading(false));
   }, [type]);
 
@@ -31,11 +37,31 @@ export default function LeaderboardPage() {
   return (
     <div className="page-content">
       {/* Header */}
-      <div className="px-4" style={{ paddingTop: 24, paddingBottom: 12 }}>
-        <h1 className="title-lg text-gradient">Рейтинг</h1>
-        {myRank && (
-          <p className="body-sm text-faint mt-1">Ты на <span style={{ color: 'var(--accent)' }}>#{myRank}</span> месте</p>
-        )}
+      <div className="px-4" style={{ paddingTop: 24, paddingBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 className="title-lg text-gradient">Рейтинг</h1>
+          {myRank && (
+            <p className="body-sm text-faint mt-1">Ты на <span style={{ color: 'var(--accent)' }}>#{myRank}</span> месте</p>
+          )}
+        </div>
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setShowInfo(true)}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            background: 'var(--surface-2)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-2)',
+          }}
+        >
+          <Info size={18} />
+        </motion.button>
       </div>
 
       {/* Tabs */}
@@ -166,6 +192,64 @@ export default function LeaderboardPage() {
           </div>
         </>
       )}
+
+      {/* Info Modal */}
+      <AnimatePresence>
+        {showInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 50,
+              padding: 16,
+            }}
+            onClick={() => setShowInfo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--surface)',
+                borderRadius: 20,
+                padding: 24,
+                width: '100%',
+                maxWidth: 380,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 className="title-lg">О разделе Рейтинг</h2>
+                <button onClick={() => setShowInfo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <X size={24} color="var(--text-2)" />
+                </button>
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-2)' }}>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>Рейтинг:</strong> Твоя оценка от партнеров и смотрящих. Чем лучше ты выполняешь цели, тем выше рейтинг.
+                </p>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>LIT:</strong> Внутренняя валюта, которую получаешь за выполнение целей с высокой сложностью.
+                </p>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>Цели:</strong> Количество выполненных целей.
+                </p>
+                <p style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                  Конкурируй с другими пользователями и поднимайся на вершину рейтинга!
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

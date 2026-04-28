@@ -3,12 +3,13 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { verifyTelegramInitData } from '../middleware/auth';
-
-const router = Router();
+import { redis } from '../lib/redis';
 
 const AuthSchema = z.object({
   initData: z.string().min(1),
 });
+
+const router = Router();
 
 router.post('/telegram', async (req: Request, res: Response) => {
   const parsed = AuthSchema.safeParse(req.body);
@@ -63,26 +64,61 @@ router.post('/telegram', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid user data' });
   }
 
-  const user = await prisma.user.upsert({
+  console.log('Looking up/creating user with telegramId:', tgUser.id);
+  
+  const existingUser = await prisma.user.findUnique({
     where: { telegramId: BigInt(tgUser.id) },
-    update: {
-      username: tgUser.username ?? null,
-      firstName: tgUser.first_name ?? null,
-      lastName: tgUser.last_name ?? null,
-      photoUrl: tgUser.photo_url ?? null,
-      // displayName обновляем только если не задан пользователем вручную
-    },
-    create: {
-      telegramId: BigInt(tgUser.id),
-      username: tgUser.username ?? null,
-      displayName: tgUser.first_name
-        ? `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`
-        : null,
-      firstName: tgUser.first_name ?? null,
-      lastName: tgUser.last_name ?? null,
-      photoUrl: tgUser.photo_url ?? null,
-    },
   });
+
+  let user;
+  let isNewUser = false;
+
+  if (existingUser) {
+    // Обновляем существующего пользователя
+    user = await prisma.user.update({
+      where: { telegramId: BigInt(tgUser.id) },
+      data: {
+        username: tgUser.username ?? null,
+        firstName: tgUser.first_name ?? null,
+        lastName: tgUser.last_name ?? null,
+        photoUrl: tgUser.photo_url ?? null,
+      },
+    });
+  } else {
+    // Создаем нового пользователя
+    user = await prisma.user.create({
+      data: {
+        telegramId: BigInt(tgUser.id),
+        username: tgUser.username ?? null,
+        displayName: tgUser.first_name
+          ? `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`
+          : null,
+        firstName: tgUser.first_name ?? null,
+        lastName: tgUser.last_name ?? null,
+        photoUrl: tgUser.photo_url ?? null,
+      },
+    });
+    isNewUser = true;
+  }
+
+  console.log('User found/created:', {
+    id: user.id,
+    telegramId: user.telegramId,
+    username: user.username,
+    displayName: user.displayName,
+    isNewUser,
+  });
+
+  // Если это новый пользователь, автоматически добавляем в очередь поиска партнера
+  if (isNewUser) {
+    try {
+      // Добавляем в Redis для быстрого доступа
+      await redis.set(`matching:user:${user.id}`, '1', 'EX', 3600); // 1 час
+      console.log('User added to matching queue automatically:', user.id);
+    } catch (error) {
+      console.error('Failed to add user to matching queue:', error);
+    }
+  }
 
   const token = jwt.sign(
     { userId: Number(user.id), telegramId: Number(user.telegramId) },

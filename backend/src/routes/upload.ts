@@ -73,8 +73,8 @@ router.post('/multiple', requireAuth, upload.array('files', 10), async (req: Req
     return res.status(400).json({ error: 'Файлы не загружены' });
   }
 
-  if (files.length > 10) {
-    return res.status(400).json({ error: 'Максимум 10 файлов за раз' });
+  if (files.length > 6) {
+    return res.status(400).json({ error: 'Максимум 6 файлов за раз' });
   }
 
   try {

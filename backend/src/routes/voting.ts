@@ -63,6 +63,59 @@ router.get('/next', requireAuth, async (req: Request, res: Response) => {
   });
 });
 
+// Получить список целей доступных для проверки (портфель проверок)
+router.get('/portfolio', requireAuth, async (req: Request, res: Response) => {
+  const userId = BigInt(req.user!.userId);
+
+  const alreadyVoted = await prisma.vote.findMany({
+    where: { voterId: userId },
+    select: { goalId: true },
+  });
+  const votedIds = alreadyVoted.map(v => v.goalId);
+
+  const sessions = await prisma.votingSession.findMany({
+    where: {
+      status: 'open',
+      deadline: { gte: new Date() },
+      goalId: { notIn: votedIds },
+      goal: { userId: { not: userId } },
+    },
+    include: {
+      goal: {
+        include: {
+          user: { select: { id: true, username: true, displayName: true, photoUrl: true, level: true } },
+          proofs: { orderBy: { submittedAt: 'desc' }, take: 1 },
+        },
+      },
+    },
+    orderBy: { deadline: 'asc' },
+    take: 20,
+  });
+
+  return res.json({
+    goals: sessions.map(session => ({
+      sessionId: Number(session.id),
+      goalId: Number(session.goalId),
+      requiredVotes: session.requiredVotes,
+      votesCount: session.votesCount,
+      deadline: session.deadline,
+      goal: {
+        id: Number(session.goal.id),
+        title: session.goal.title,
+        successCriteria: session.goal.successCriteria,
+        difficulty: session.goal.difficulty,
+        user: { ...session.goal.user, id: Number(session.goal.user.id) },
+        proof: session.goal.proofs[0]
+          ? {
+              description: session.goal.proofs[0].description,
+              mediaUrls: session.goal.proofs[0].mediaUrls,
+            }
+          : null,
+      },
+    })),
+  });
+});
+
 router.post('/:id/vote', requireAuth, async (req: Request, res: Response) => {
   const sessionId = Number(req.params.id);
   const parsed = VoteSchema.safeParse(req.body);

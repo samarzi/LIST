@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, ChevronRight, CheckCircle2, Upload } from 'lucide-react';
-import { goalsApi, type Goal, type CreateGoalDto } from '../api/client';
-import { useAuthStore } from '../store';
-import GoalCard from '../components/GoalCard';
-import ProfileCard from '../components/ProfileCard';
+import { Plus, X, ChevronRight, Flame, ImageIcon, Video, LinkIcon, Paperclip, CheckCircle2, Upload, Trash2, CheckSquare, Repeat, Check, Info } from 'lucide-react';
+import { goalsApi, uploadApi, type Goal, type CreateGoalDto } from '../api/client';
+import { useAuthStore, useUIStore, useGoalsStore } from '../store';
+import { tasksApi, habitsApi, type Task, type Habit } from '../api/client';
 
 const STATUS_LABELS: Record<string, string> = {
   draft:       'Черновик',
@@ -34,22 +33,34 @@ const STATUS_FILTERS = [
 
 export default function GoalsPage() {
   const { user } = useAuthStore();
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const { goals, setGoals, addGoal, updateGoal } = useGoalsStore();
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState('all');
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [activeTab, setActiveTab] = useState<'goals' | 'tasks' | 'habits'>('goals');
+  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     loadGoals();
-  }, []);
+  }, []); // Load on mount only
+
+  useEffect(() => {
+    if (user) {
+      loadGoals();
+    }
+  }, [user?.id]); // Reload when user changes
 
   async function loadGoals() {
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+    setLoading(true);
     try {
       const { data } = await goalsApi.list();
+      console.log('Loaded goals:', data.length, 'for user:', currentUser.id);
       setGoals(data);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load goals:', err);
     } finally {
       setLoading(false);
     }
@@ -62,78 +73,148 @@ export default function GoalsPage() {
     return true;
   });
 
+  const tabs = [
+    { id: 'goals' as const, label: 'Цели', icon: Flame },
+    { id: 'tasks' as const, label: 'Задачи', icon: CheckSquare },
+    { id: 'habits' as const, label: 'Привычки', icon: Repeat },
+  ];
+
   return (
     <div className="page-content">
-      {/* Profile */}
-      {user && (
-        <div style={{ paddingTop: 16, paddingBottom: 12 }}>
-          <ProfileCard user={user} />
-        </div>
-      )}
-
       {/* Header */}
-      <div className="flex items-center justify-between px-4" style={{ marginBottom: 12 }}>
+      <div className="flex items-center justify-between px-4" style={{ marginBottom: 12, paddingTop: 16 }}>
         <div>
-          <h1 className="title-lg text-gradient">Мои цели</h1>
-          <p className="body-sm text-faint mt-1">{goals.length} цел{goals.length === 1 ? 'ь' : 'и'}</p>
+          <h1 className="title-lg text-gradient">Путь</h1>
+          <p className="body-sm text-faint mt-1">Твои цели, задачи и привычки</p>
         </div>
         <motion.button
-          whileTap={{ scale: 0.92 }}
-          className="btn btn-primary btn-sm"
-          onClick={() => setShowCreate(true)}
-          style={{ gap: 6 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setShowInfo(true)}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            background: 'var(--surface-2)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-2)',
+          }}
         >
-          <Plus size={16} />
-          Новая
+          <Info size={18} />
         </motion.button>
       </div>
 
-      {/* Filters */}
-      <div
-        className="flex gap-2 px-4"
-        style={{ marginBottom: 16 }}
-      >
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            style={{
-              flex: 1,
-              padding: '7px 4px',
-              borderRadius: 20,
-              border: 'none',
-              background: filter === f.id ? 'var(--accent)' : 'var(--surface-2)',
-              color: filter === f.id ? '#fff' : 'var(--text-2)',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.2s',
-              textAlign: 'center',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* Tabs */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <div className="flex gap-2" style={{ background: 'var(--surface-2)', padding: 4, borderRadius: 12 }}>
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  background: isActive ? 'var(--surface-1)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'var(--text-1)' : 'var(--text-3)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Goals list */}
-      <div className="px-4">
-        {loading ? (
-          <GoalsSkeleton />
-        ) : filtered.length === 0 ? (
-          <EmptyGoals onAdd={() => setShowCreate(true)} />
-        ) : (
-          filtered.map((goal, i) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              index={i}
-              onClick={() => setSelectedGoal(goal)}
-            />
-          ))
+      {/* Content */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        {activeTab === 'goals' && (
+          <>
+            {/* Filters */}
+            <div
+              className="flex gap-2 px-4"
+              style={{ marginBottom: 16 }}
+            >
+              {STATUS_FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  style={{
+                    flex: 1,
+                    padding: '7px 4px',
+                    borderRadius: 20,
+                    border: 'none',
+                    background: filter === f.id ? 'var(--accent)' : 'var(--surface-2)',
+                    color: filter === f.id ? '#fff' : 'var(--text-2)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s',
+                    textAlign: 'center',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Goals list */}
+            <div className="px-4">
+              {loading ? (
+                <GoalsSkeleton />
+              ) : filtered.length === 0 ? (
+                <EmptyGoals onAdd={() => setShowCreate(true)} />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {filtered.map((goal, i) => (
+                    <motion.div
+                      key={goal.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="card"
+                      style={{ padding: '14px 16px', cursor: 'pointer' }}
+                      onClick={() => setSelectedGoal(goal)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="body-sm" style={{ fontWeight: 600, marginBottom: 4 }}>{goal.title}</div>
+                          <div className="caption text-faint">{STATUS_LABELS[goal.status] || goal.status}</div>
+                        </div>
+                        <ChevronRight size={18} color="var(--text-3)" />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
-      </div>
+        {activeTab === 'tasks' && <TasksTracker />}
+        {activeTab === 'habits' && <HabitsTracker />}
+      </motion.div>
 
       {/* Create modal */}
       <AnimatePresence>
@@ -153,6 +234,64 @@ export default function GoalsPage() {
             onClose={() => setSelectedGoal(null)}
             onUpdate={loadGoals}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Info Modal */}
+      <AnimatePresence>
+        {showInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 50,
+              padding: 16,
+            }}
+            onClick={() => setShowInfo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--surface)',
+                borderRadius: 20,
+                padding: 24,
+                width: '100%',
+                maxWidth: 380,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 className="title-lg">О разделе Путь</h2>
+                <button onClick={() => setShowInfo(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <X size={24} color="var(--text-2)" />
+                </button>
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-2)' }}>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>Цели:</strong> Ставь амбициозные цели, получай сложность от партнера и докажи их выполнение с доказательствами.
+                </p>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>Задачи:</strong> Веди список задач для ежедневной продуктивности и отслеживай их выполнение.
+                </p>
+                <p style={{ marginBottom: 12 }}>
+                  <strong style={{ color: 'var(--text-1)' }}>Привычки:</strong> Формируй полезные привычки и отслеживай их выполнение по дням недели.
+                </p>
+                <p style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                  Все это поможет тебе систематически развиваться и достигать результатов!
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -341,7 +480,7 @@ function CreateGoalModal({ onClose, onCreated }: { onClose: () => void; onCreate
                     placeholder="0"
                     min={0}
                     value={form.stakeLit ?? ''}
-                    onChange={e => setForm(p => ({ ...p, stakeLit: Number(e.target.value) }))}
+                    onChange={e => setForm((p: any) => ({ ...p, stakeLit: Number(e.target.value) }))}
                   />
                 </label>
               </div>
@@ -407,16 +546,65 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
   const [loadingCheckin, setLoadingCheckin] = useState(false);
   const [showProof, setShowProof] = useState(false);
   const [proofText, setProofText] = useState('');
+  const [checkinFiles, setCheckinFiles] = useState<File[]>([]);
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
+  const [linkInput, setLinkInput] = useState('');
+  const [links, setLinks] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const deadline = new Date(goal.deadline);
   const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
+  async function handleFileUpload(files: File[], isProof: boolean) {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const { data } = await uploadApi.uploadMultiple(files);
+      const urls = data.files.map(f => f.url);
+      if (isProof) {
+        setProofFiles(prev => [...prev, ...files]);
+      } else {
+        setCheckinFiles(prev => [...prev, ...files]);
+      }
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch (err) {
+      console.error('Upload failed:', err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function addLink() {
+    if (linkInput.trim() && links.length < 6) {
+      setLinks([...links, linkInput.trim()]);
+      setLinkInput('');
+    }
+  }
+
+  function removeLink(index: number) {
+    setLinks(links.filter((_, i) => i !== index));
+  }
+
   async function submitCheckin() {
-    if (!checkinText.trim()) return;
+    if (!checkinText.trim() && checkinFiles.length === 0 && links.length === 0) return;
     setLoadingCheckin(true);
     try {
-      await goalsApi.checkin(goal.id, checkinText);
+      const mediaUrls: string[] = [];
+      
+      // Upload files if any
+      if (checkinFiles.length > 0) {
+        const { data } = await uploadApi.uploadMultiple(checkinFiles);
+        mediaUrls.push(...data.files.map(f => f.url));
+      }
+      
+      // Add links
+      mediaUrls.push(...links);
+      
+      await goalsApi.checkin(goal.id, checkinText, mediaUrls);
       setCheckinText('');
+      setCheckinFiles([]);
+      setLinks([]);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       onUpdate();
     } finally {
@@ -425,10 +613,24 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
   }
 
   async function submitProof() {
-    if (!proofText.trim()) return;
+    if (!proofText.trim() && proofFiles.length === 0 && links.length === 0) return;
     try {
-      await goalsApi.submitProof(goal.id, { description: proofText });
+      const mediaUrls: string[] = [];
+      
+      // Upload files if any
+      if (proofFiles.length > 0) {
+        const { data } = await uploadApi.uploadMultiple(proofFiles);
+        mediaUrls.push(...data.files.map(f => f.url));
+      }
+      
+      // Add links
+      mediaUrls.push(...links);
+      
+      await goalsApi.submitProof(goal.id, { description: proofText, mediaUrls });
       setShowProof(false);
+      setProofText('');
+      setProofFiles([]);
+      setLinks([]);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       onUpdate();
       onClose();
@@ -486,11 +688,90 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
               rows={2}
               style={{ marginBottom: 8 }}
             />
+            
+            {/* File upload for checkin */}
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="file"
+                id="checkin-files"
+                multiple
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const files = Array.from(e.target.files || []);
+                  if (checkinFiles.length + files.length <= 6) {
+                    setCheckinFiles(prev => [...prev, ...files]);
+                  }
+                }}
+              />
+              <label
+                htmlFor="checkin-files"
+                className="btn btn-ghost"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              >
+                <Paperclip size={14} />
+                Прикрепить файлы ({checkinFiles.length}/6)
+              </label>
+              {checkinFiles.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {checkinFiles.map((file, i) => (
+                    <span key={i} className="badge" style={{ fontSize: 11 }}>
+                      {file.name}
+                      <button
+                        onClick={() => setCheckinFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        style={{ marginLeft: 4, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Link input for checkin */}
+            <div style={{ marginBottom: 8 }}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Вставь ссылку..."
+                  value={linkInput}
+                  onChange={e => setLinkInput(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && addLink()}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="btn btn-ghost"
+                  onClick={addLink}
+                  disabled={links.length >= 6}
+                >
+                  <LinkIcon size={14} />
+                </button>
+              </div>
+              {links.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {links.map((link, i) => (
+                    <span key={i} className="badge" style={{ fontSize: 11 }}>
+                      <LinkIcon size={10} style={{ marginRight: 4 }} />
+                      {link.substring(0, 20)}...
+                      <button
+                        onClick={() => removeLink(i)}
+                        style={{ marginLeft: 4, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button
                 className="btn btn-primary"
                 onClick={submitCheckin}
-                disabled={loadingCheckin || !checkinText.trim()}
+                disabled={loadingCheckin || (!checkinText.trim() && checkinFiles.length === 0 && links.length === 0)}
                 style={{ flex: 1 }}
               >
                 {loadingCheckin ? 'Отправляю...' : '✓ Отправить чекин'}
@@ -518,6 +799,85 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
               rows={4}
               style={{ marginBottom: 8 }}
             />
+            
+            {/* File upload for proof */}
+            <div style={{ marginBottom: 8 }}>
+              <input
+                type="file"
+                id="proof-files"
+                multiple
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const files = Array.from(e.target.files || []);
+                  if (proofFiles.length + files.length <= 6) {
+                    setProofFiles(prev => [...prev, ...files]);
+                  }
+                }}
+              />
+              <label
+                htmlFor="proof-files"
+                className="btn btn-ghost"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              >
+                <Paperclip size={14} />
+                Прикрепить файлы ({proofFiles.length}/6)
+              </label>
+              {proofFiles.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {proofFiles.map((file, i) => (
+                    <span key={i} className="badge" style={{ fontSize: 11 }}>
+                      {file.name}
+                      <button
+                        onClick={() => setProofFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        style={{ marginLeft: 4, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Link input for proof */}
+            <div style={{ marginBottom: 8 }}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Вставь ссылку..."
+                  value={linkInput}
+                  onChange={e => setLinkInput(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && addLink()}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="btn btn-ghost"
+                  onClick={addLink}
+                  disabled={links.length >= 6}
+                >
+                  <LinkIcon size={14} />
+                </button>
+              </div>
+              {links.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {links.map((link, i) => (
+                    <span key={i} className="badge" style={{ fontSize: 11 }}>
+                      <LinkIcon size={10} style={{ marginRight: 4 }} />
+                      {link.substring(0, 20)}...
+                      <button
+                        onClick={() => removeLink(i)}
+                        style={{ marginLeft: 4, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button className="btn btn-ghost" onClick={() => setShowProof(false)} style={{ flex: 0.4 }}>
                 Отмена
@@ -525,10 +885,10 @@ function GoalDetailModal({ goal, onClose, onUpdate }: { goal: Goal; onClose: () 
               <button
                 className="btn btn-primary"
                 onClick={submitProof}
-                disabled={proofText.trim().length < 10}
+                disabled={uploading || (!proofText.trim() && proofFiles.length === 0 && links.length === 0)}
                 style={{ flex: 1 }}
               >
-                Подать на проверку
+                {uploading ? 'Загрузка...' : 'Подать на проверку'}
               </button>
             </div>
           </div>
@@ -547,6 +907,432 @@ function GoalsSkeleton() {
           <div className="skeleton" style={{ width: '80%', height: 16, marginBottom: 8 }} />
           <div className="skeleton" style={{ width: '50%', height: 12 }} />
         </div>
+      ))}
+    </div>
+  );
+}
+
+function TasksTracker() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDesc, setNewTaskDesc] = useState('');
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  async function loadTasks() {
+    try {
+      const { data } = await tasksApi.list();
+      setTasks(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function addTask() {
+    if (!newTaskTitle.trim()) return;
+    try {
+      const { data } = await tasksApi.create({ title: newTaskTitle, description: newTaskDesc });
+      setTasks([data, ...tasks]);
+      setNewTaskTitle('');
+      setNewTaskDesc('');
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to add task:', err);
+    }
+  }
+
+  async function toggleTask(id: number, completed: boolean) {
+    try {
+      const { data } = await tasksApi.update(id, { completed: !completed });
+      setTasks(tasks.map(t => t.id === id ? data : t));
+    } catch (err) {
+      console.error('Failed to toggle task:', err);
+    }
+  }
+
+  async function deleteTask(id: number) {
+    try {
+      await tasksApi.delete(id);
+      setTasks(tasks.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  }
+
+  if (loading) return <TasksSkeleton />;
+
+  return (
+    <div style={{ padding: '0 16px' }}>
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="btn btn-primary btn-full"
+        style={{ marginBottom: 16 }}
+      >
+        <Plus size={16} />
+        Добавить задачу
+      </button>
+
+      {tasks.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon"><CheckSquare size={28} color="var(--text-3)" /></div>
+          <div>
+            <h3 className="title-sm">Нет задач</h3>
+            <p className="body-sm text-faint mt-1">Добавь первую задачу для отслеживания</p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {tasks.map((task, i) => (
+            <motion.div
+              key={task.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="card"
+              style={{
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                textDecoration: task.completed ? 'line-through' : 'none',
+                opacity: task.completed ? 0.6 : 1,
+              }}
+            >
+              <button
+                onClick={() => toggleTask(task.id, task.completed)}
+                style={{
+                  width: 24, height: 24,
+                  borderRadius: 6,
+                  border: `2px solid ${task.completed ? 'var(--green)' : 'var(--border)'}`,
+                  background: task.completed ? 'var(--green)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {task.completed && <Check size={14} color="#fff" />}
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="body-sm" style={{ fontWeight: 500 }}>{task.title}</div>
+                {task.description && (
+                  <div className="caption text-faint mt-1">{task.description}</div>
+                )}
+              </div>
+              <button
+                onClick={() => deleteTask(task.id)}
+                className="btn-icon btn-ghost"
+                style={{ color: 'var(--red)', flexShrink: 0 }}
+              >
+                <Trash2 size={16} />
+              </button>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={e => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          >
+            <motion.div
+              className="modal-sheet"
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+            >
+              <div className="modal-handle" />
+              <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+                <h2 className="title-sm">Новая задача</h2>
+                <button className="btn-icon btn-ghost" onClick={() => setShowAddModal(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div className="label text-faint mb-2">Название *</div>
+                <input
+                  className="input"
+                  placeholder="Что нужно сделать?"
+                  value={newTaskTitle}
+                  onChange={e => setNewTaskTitle(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div className="label text-faint mb-2">Описание (необязательно)</div>
+                <textarea
+                  className="input"
+                  placeholder="Дополнительные детали..."
+                  value={newTaskDesc}
+                  onChange={e => setNewTaskDesc(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <button
+                className="btn btn-primary btn-full"
+                onClick={addTask}
+                disabled={!newTaskTitle.trim()}
+              >
+                Создать
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function HabitsTracker() {
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newHabitTitle, setNewHabitTitle] = useState('');
+  const [newHabitDesc, setNewHabitDesc] = useState('');
+  const [selectedDays, setSelectedDays] = useState<string[]>(['mon', 'tue', 'wed', 'thu', 'fri']);
+
+  const DAY_LABELS: Record<string, string> = {
+    mon: 'Пн', tue: 'Вт', wed: 'Ср', thu: 'Чт', fri: 'Пт', sat: 'Сб', sun: 'Вс',
+  };
+
+  useEffect(() => {
+    loadHabits();
+  }, []);
+
+  async function loadHabits() {
+    try {
+      const { data } = await habitsApi.list();
+      setHabits(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function addHabit() {
+    if (!newHabitTitle.trim()) return;
+    try {
+      const { data } = await habitsApi.create({ 
+        title: newHabitTitle, 
+        description: newHabitDesc,
+        targetDays: selectedDays 
+      });
+      setHabits([data, ...habits]);
+      setNewHabitTitle('');
+      setNewHabitDesc('');
+      setSelectedDays(['mon', 'tue', 'wed', 'thu', 'fri']);
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to add habit:', err);
+    }
+  }
+
+  async function toggleHabit(id: number) {
+    try {
+      const { data } = await habitsApi.toggle(id);
+      setHabits(habits.map(h => h.id === id ? { ...h, completedToday: data.completed } : h));
+    } catch (err) {
+      console.error('Failed to toggle habit:', err);
+    }
+  }
+
+  async function deleteHabit(id: number) {
+    try {
+      await habitsApi.delete(id);
+      setHabits(habits.filter(h => h.id !== id));
+    } catch (err) {
+      console.error('Failed to delete habit:', err);
+    }
+  }
+
+  function toggleDay(day: string) {
+    setSelectedDays(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  }
+
+  if (loading) return <HabitsSkeleton />;
+
+  return (
+    <div style={{ padding: '0 16px' }}>
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="btn btn-primary btn-full"
+        style={{ marginBottom: 16 }}
+      >
+        <Plus size={16} />
+        Добавить привычку
+      </button>
+
+      {habits.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon"><Repeat size={28} color="var(--text-3)" /></div>
+          <div>
+            <h3 className="title-sm">Нет привычек</h3>
+            <p className="body-sm text-faint mt-1">Добавь первую привычку для отслеживания</p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {habits.map((habit, i) => (
+            <motion.div
+              key={habit.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="card"
+              style={{ padding: '12px 14px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <button
+                  onClick={() => toggleHabit(habit.id)}
+                  style={{
+                    width: 28, height: 28,
+                    borderRadius: 8,
+                    border: `2px solid ${habit.completedToday ? 'var(--green)' : 'var(--border)'}`,
+                    background: habit.completedToday ? 'var(--green)' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  {habit.completedToday && <Check size={16} color="#fff" />}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="body-sm" style={{ fontWeight: 500 }}>{habit.title}</div>
+                  {habit.description && (
+                    <div className="caption text-faint mt-1">{habit.description}</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => deleteHabit(habit.id)}
+                  className="btn-icon btn-ghost"
+                  style={{ color: 'var(--red)', flexShrink: 0 }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <div className="flex gap-1" style={{ marginLeft: 40 }}>
+                {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
+                  <div
+                    key={day}
+                    style={{
+                      width: 28, height: 28,
+                      borderRadius: 6,
+                      background: habit.targetDays.includes(day) ? 'var(--accent)' : 'var(--surface-2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11,
+                      color: habit.targetDays.includes(day) ? '#fff' : 'var(--text-3)',
+                    }}
+                  >
+                    {DAY_LABELS[day]}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={e => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          >
+            <motion.div
+              className="modal-sheet"
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+            >
+              <div className="modal-handle" />
+              <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+                <h2 className="title-sm">Новая привычка</h2>
+                <button className="btn-icon btn-ghost" onClick={() => setShowAddModal(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div className="label text-faint mb-2">Название *</div>
+                <input
+                  className="input"
+                  placeholder="Какую привычку хочешь развить?"
+                  value={newHabitTitle}
+                  onChange={e => setNewHabitTitle(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div className="label text-faint mb-2">Описание (необязательно)</div>
+                <textarea
+                  className="input"
+                  placeholder="Дополнительные детали..."
+                  value={newHabitDesc}
+                  onChange={e => setNewHabitDesc(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div className="label text-faint mb-2">Дни недели</div>
+                <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
+                  {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
+                    <button
+                      key={day}
+                      onClick={() => toggleDay(day)}
+                      style={{
+                        width: 36, height: 36,
+                        borderRadius: 8,
+                        background: selectedDays.includes(day) ? 'var(--accent)' : 'var(--surface-2)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color: selectedDays.includes(day) ? '#fff' : 'var(--text-3)',
+                      }}
+                    >
+                      {DAY_LABELS[day]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                className="btn btn-primary btn-full"
+                onClick={addHabit}
+                disabled={!newHabitTitle.trim() || selectedDays.length === 0}
+              >
+                Создать
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function TasksSkeleton() {
+  return (
+    <div style={{ padding: '0 16px' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="card" style={{ height: 60, marginBottom: 8 }} />
+      ))}
+    </div>
+  );
+}
+
+function HabitsSkeleton() {
+  return (
+    <div style={{ padding: '0 16px' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="card" style={{ height: 80, marginBottom: 8 }} />
       ))}
     </div>
   );

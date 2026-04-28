@@ -9,7 +9,7 @@ import GoalsPage from './pages/Goals';
 import WatchPage from './pages/Watch';
 import LeaderboardPage from './pages/Leaderboard';
 import LITPage from './pages/LIT';
-import TeachersPage from './pages/Teachers';
+import SearchPage from './pages/Search';
 import VotingPage from './pages/Voting';
 
 declare global {
@@ -56,12 +56,12 @@ declare global {
 }
 
 const PAGES: Record<string, React.ComponentType> = {
-  goals: GoalsPage,
-  watch: WatchPage,
+  path: GoalsPage,
+  helper: WatchPage,
   leaderboard: LeaderboardPage,
-  lit: LITPage,
+  teachers: SearchPage,
+  profile: LITPage,
   voting: VotingPage,
-  teachers: TeachersPage,
 };
 
 export default function App() {
@@ -119,19 +119,15 @@ export default function App() {
       initDataPreview: initData.substring(0, 100),
     });
 
-    // Dev mode fallback — skip API entirely
+    // Dev mode fallback — use test: format to authenticate with backend
     if (!initData && import.meta.env.DEV) {
-      const mockUser = {
-        id: 1, telegramId: 123456789, username: 'devuser',
-        displayName: 'Александр К.', firstName: 'Александр', lastName: 'К.',
-        photoUrl: null, level: 5, rating: 4.3, litBalance: 240,
-        isTeacher: false, isArbitrator: false, teacherRating: null,
-        freezeCount30d: 0, totalGoalsCompleted: 8, totalGoalsFailed: 2,
-        createdAt: new Date().toISOString(),
+      const devUser = {
+        id: 999999999, // Fixed telegramId for dev mode
+        username: 'devuser',
+        first_name: 'Dev',
+        last_name: 'User',
       };
-      setAuth('dev-token', mockUser as any);
-      setAuthState('authed');
-      return;
+      initData = `test:${JSON.stringify(devUser)}`;
     }
 
     if (!initData) {
@@ -157,12 +153,12 @@ export default function App() {
     const tg = window.Telegram?.WebApp;
     let initData = tg?.initData ?? '';
 
-    if (!initData && import.meta.env.DEV && user) {
+    if (!initData && import.meta.env.DEV) {
       const devUser = {
-        id: user.telegramId,
-        username: user.username,
-        first_name: user.firstName,
-        last_name: user.lastName,
+        id: 999999999, // Fixed telegramId for dev mode
+        username: 'devuser',
+        first_name: 'Dev',
+        last_name: 'User',
       };
       initData = `test:${JSON.stringify(devUser)}`;
     }
@@ -202,7 +198,7 @@ export default function App() {
 
       {/* Page content with animated transitions */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="sync">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 8 }}

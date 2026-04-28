@@ -107,7 +107,7 @@ export function createBot(token: string, miniAppUrl: string) {
     if (!user) return ctx.reply('Сначала запусти бота командой /start');
 
     const pair = await prisma.pair.findFirst({
-      where: { studentId: user.id, status: 'active' },
+      where: { partnerId: user.id, status: 'active' },
       include: { watcher: { select: { username: true, displayName: true, level: true } } },
     });
 
@@ -128,11 +128,65 @@ export function createBot(token: string, miniAppUrl: string) {
     );
   });
 
+  bot.command('checkin', async ctx => {
+    const tgUser = ctx.from;
+    if (!tgUser) return;
+
+    const user = await prisma.user.findUnique({ where: { telegramId: BigInt(tgUser.id) } });
+    if (!user) return ctx.reply('Сначала запусти бота командой /start');
+
+    const activeGoal = await prisma.goal.findFirst({
+      where: { userId: user.id, status: 'in_progress' },
+      orderBy: { deadline: 'asc' },
+    });
+
+    if (!activeGoal) {
+      return ctx.reply('У тебя нет активных целей для чекина. Создай цель в приложении.', {
+        ...Markup.inlineKeyboard([[Markup.button.webApp('📱 Открыть LIST', miniAppUrl)]]),
+      });
+    }
+
+    const content = ctx.message.text.replace('/checkin', '').trim();
+
+    if (!content) {
+      const days = Math.ceil((activeGoal.deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return ctx.reply(
+        `📝 *Чекин по цели:*\n_${activeGoal.title}_\n\n` +
+        `Напиши: /checkin <текст прогресса>\n\n` +
+        `*Пример:* /checkin Сегодня сделал 30 отжиманий и 5 км бега\n\n` +
+        `⏱ Осталось ${days > 0 ? `${days} дн.` : 'Просрочена'}`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    await prisma.checkin.create({
+      data: {
+        goalId: activeGoal.id,
+        userId: user.id,
+        content,
+      },
+    });
+
+    const days = Math.ceil((activeGoal.deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+    await ctx.reply(
+      `✅ *Чекин записан!*\n\n` +
+      `_"${content}"_\n\n` +
+      `Цель: *${activeGoal.title}*\n` +
+      `Осталось: ${days > 0 ? `${days} дн.` : '⚠️ Просрочена'}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.webApp('📱 Посмотреть прогресс', miniAppUrl)]]),
+      }
+    );
+  });
+
   bot.command('help', ctx => {
     ctx.reply(
       '*Команды LIST:*\n\n' +
       '/start — главное меню\n' +
       '/goals — мои активные цели\n' +
+      '/checkin <текст> — быстрый чекин\n' +
       '/balance — баланс LIT\n' +
       '/partner — мой смотрящий\n' +
       '/help — помощь',
