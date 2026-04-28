@@ -18,7 +18,7 @@ router.post('/telegram', async (req: Request, res: Response) => {
   }
 
   const { initData } = parsed.data;
-  const botToken = process.env.TELEGRAM_BOT_TOKEN!;
+  const botToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
 
   console.log('Auth request:', {
     initDataLength: initData.length,
