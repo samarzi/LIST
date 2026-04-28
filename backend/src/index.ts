@@ -65,6 +65,16 @@ app.use('/api/habits', habitsRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
+// Ping endpoint для поддержания активности
+app.get('/ping', (_req, res) => {
+  res.json({ 
+    status: 'pong', 
+    timestamp: new Date(),
+    uptime: process.uptime()
+  });
+  console.log('Ping received - keeping service alive');
+});
+
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
