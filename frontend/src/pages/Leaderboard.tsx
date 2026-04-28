@@ -39,7 +39,7 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 px-4" style={{ marginBottom: 20, overflowX: 'auto', scrollbarWidth: 'none' }}>
+      <div className="flex gap-2" style={{ marginBottom: 20, overflowX: 'auto', scrollbarWidth: 'none', paddingLeft: 16, WebkitOverflowScrolling: 'touch' }}>
         {TABS.map(tab => {
           const Icon = tab.icon;
           const active = type === tab.id;
@@ -70,6 +70,7 @@ export default function LeaderboardPage() {
             </motion.button>
           );
         })}
+        <div style={{ flexShrink: 0, width: 16 }} />
       </div>
 
       {loading ? (

@@ -201,7 +201,7 @@ export default function App() {
       {isDesktop && <SideNav />}
 
       {/* Page content with animated transitions */}
-      <div className="page-content">
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

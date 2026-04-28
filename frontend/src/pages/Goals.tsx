@@ -91,24 +91,25 @@ export default function GoalsPage() {
       {/* Filters */}
       <div
         className="flex gap-2 px-4"
-        style={{ marginBottom: 16, overflowX: 'auto', scrollbarWidth: 'none' }}
+        style={{ marginBottom: 16 }}
       >
         {STATUS_FILTERS.map(f => (
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
             style={{
-              padding: '6px 14px',
+              flex: 1,
+              padding: '7px 4px',
               borderRadius: 20,
               border: 'none',
               background: filter === f.id ? 'var(--accent)' : 'var(--surface-2)',
               color: filter === f.id ? '#fff' : 'var(--text-2)',
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 500,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               transition: 'all 0.2s',
-              flexShrink: 0,
+              textAlign: 'center',
             }}
           >
             {f.label}

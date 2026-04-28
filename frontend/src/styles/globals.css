@@ -115,7 +115,7 @@ body {
 .page-content {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: clip;
   padding-bottom: calc(var(--nav-h) + 16px);
   overscroll-behavior: contain;
   width: 100%;
