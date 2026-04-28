@@ -96,7 +96,7 @@ function VotingForm({ session, onVoted }: { session: VotingSession; onVoted: () 
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await votingApi.vote(session.id, goalScore, watcherScore);
+      await votingApi.vote(session.id, { scoreGoal: goalScore, scoreWatcher: watcherScore });
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       onVoted();
     } finally {

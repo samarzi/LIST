@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Eye, Clock, TrendingUp, AlertCircle, X, ChevronRight, Flame,
-  CheckCircle2, XCircle, FileText, Vote, RefreshCw, ExternalLink, User, MessageSquare, Info,
+  CheckCircle2, XCircle, FileText, Vote, RefreshCw, ExternalLink, User, MessageSquare, Info, Send,
 } from 'lucide-react';
-import { pairsApi, goalsApi, votingApi, type WatcherStudent, type PairStatus } from '../api/client';
+import { pairsApi, goalsApi, votingApi, pairMessagesApi, type WatcherStudent, type PairStatus, type PairMessage } from '../api/client';
 import { useUIStore } from '../store';
 
 const DIFFICULTY_HINTS: Record<number, { label: string; color: string; desc: string }> = {
@@ -35,6 +35,9 @@ export default function WatchPage() {
   const [pendingVotes, setPendingVotes] = useState(0);
   const [joiningQueue, setJoiningQueue] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [messages, setMessages] = useState<PairMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const tabs = [
     { id: 'partner' as const, label: 'Партнер', icon: User },
