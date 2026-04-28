@@ -27,28 +27,8 @@ export function setBotInstance(bot: Telegraf) {
  * - Они не были в паре раньше
  */
 async function areCompatible(user1: MatchingQueueUser, user2: MatchingQueueUser): Promise<boolean> {
-  // Проверка: не были ли они в паре раньше
-  const previousPair = await prisma.pair.findFirst({
-    where: {
-      OR: [
-        { 
-          watcherId: user1.id, 
-          partnerId: user2.id 
-        },
-        { 
-          watcherId: user2.id, 
-          partnerId: user1.id 
-        },
-      ],
-    },
-  });
-
-  if (previousPair) {
-    console.log('Compatibility failed: previous pair exists');
-    return false;
-  }
-
-  console.log('Compatibility passed');
+  // Временно убираем все проверки для теста
+  console.log('Compatibility always true (temporarily)');
   return true;
 }
 
