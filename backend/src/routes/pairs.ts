@@ -96,15 +96,21 @@ router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
 // Вход в очередь матчинга
 router.post('/queue/join', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
+  console.log('=== POST /pairs/queue/join called ===');
+  console.log('User ID:', userId.toString());
 
   const result = await joinMatchingQueue(userId);
+  console.log('joinMatchingQueue result:', result);
   
   if (!result.success) {
+    console.log('Join queue failed:', result.message);
     return res.status(400).json({ error: result.message });
   }
 
   // Пытаемся сразу найти пару
+  console.log('Calling matchUser...');
   const matchResult = await matchUser(userId);
+  console.log('matchUser result:', matchResult);
   
   return res.json({ 
     success: true, 

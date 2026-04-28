@@ -71,22 +71,40 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 async function main() {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+  const nodeEnv = process.env.NODE_ENV;
+
+  console.log('=== Bot initialization ===');
+  console.log('TELEGRAM_BOT_TOKEN exists:', !!botToken);
+  console.log('TELEGRAM_WEBHOOK_URL:', webhookUrl);
+  console.log('NODE_ENV:', nodeEnv);
+  console.log('MINI_APP_URL:', MINI_APP_URL);
 
   if (botToken) {
-    const bot = createBot(botToken, MINI_APP_URL);
-    setBotInstance(bot); // Инициализируем бот для сервисов
-    const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+    try {
+      const bot = createBot(botToken, MINI_APP_URL);
+      setBotInstance(bot); // Инициализируем бот для сервисов
+      console.log('Bot instance created successfully');
 
-    if (webhookUrl && process.env.NODE_ENV === 'production') {
-      app.use(bot.webhookCallback('/webhook/telegram'));
-      await bot.telegram.setWebhook(`${webhookUrl}/webhook/telegram`);
-      console.log('Bot webhook set:', `${webhookUrl}/webhook/telegram`);
-    } else {
-      // Skip bot polling in development to avoid conflicts
-      console.log('Bot polling disabled in development mode');
+      if (webhookUrl && nodeEnv === 'production') {
+        app.use(bot.webhookCallback('/webhook/telegram'));
+        await bot.telegram.setWebhook(webhookUrl + '/webhook/telegram');
+        console.log('✅ Bot webhook set: ' + webhookUrl + '/webhook/telegram');
+        
+        // Verify webhook
+        const webhookInfo = await bot.telegram.getWebhookInfo();
+        console.log('Webhook info:', webhookInfo);
+      } else {
+        console.log('⚠️ Webhook not configured properly:');
+        console.log('  - webhookUrl:', webhookUrl ? 'set' : 'NOT SET');
+        console.log('  - nodeEnv:', nodeEnv);
+        console.log('Bot commands will NOT work!');
+      }
+    } catch (err) {
+      console.error('❌ Failed to initialize bot:', err);
     }
   } else {
-    console.warn('TELEGRAM_BOT_TOKEN not set — bot disabled');
+    console.warn('❌ TELEGRAM_BOT_TOKEN not set — bot disabled');
   }
 
   app.listen(PORT, () => {

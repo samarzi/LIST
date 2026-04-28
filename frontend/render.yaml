@@ -6,4 +6,4 @@ services:
     publishDir: dist
     envVars:
       - key: VITE_API_URL
-        value: https://list-backend.onrender.com/api
+        value: https://list-xckn.onrender.com/api

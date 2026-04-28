@@ -19,5 +19,9 @@ services:
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+      - key: TELEGRAM_WEBHOOK_URL
+        value: https://list-xckn.onrender.com
       - key: MINI_APP_URL
-        value: https://stellular-haupia-9bddae.netlify.app
+        value: https://stellular-haupia-9bddae.netlify.app/
+      - key: FRONTEND_URL
+        value: https://stellular-haupia-9bddae.netlify.app/
