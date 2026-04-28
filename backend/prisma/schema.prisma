@@ -212,13 +212,28 @@ model Task {
   description   String?
   completed     Boolean   @default(false)
   completedAt   DateTime? @map("completed_at")
+  deadline      DateTime? @db.Date
   reminderTime  DateTime? @map("reminder_time")
   reminderSent  Boolean   @default(false) @map("reminder_sent")
+  archivedAt    DateTime? @map("archived_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  subtasks      TaskSubtask[]
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("tasks")
+}
+
+model TaskSubtask {
+  id        BigInt   @id @default(autoincrement())
+  taskId    BigInt   @map("task_id")
+  title     String   @db.VarChar(200)
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_subtasks")
 }
 
 model Habit {
@@ -227,6 +242,7 @@ model Habit {
   title         String          @db.VarChar(200)
   description   String?
   targetDays    String[]        @map("target_days")
+  deadline      DateTime?       @db.Date
   reminderTime  DateTime?       @map("reminder_time")
   reminderSent  Boolean         @default(false) @map("reminder_sent")
   createdAt     DateTime        @default(now()) @map("created_at")

@@ -27,13 +27,14 @@ router.post('/telegram', async (req: Request, res: Response) => {
     hasBotToken: !!botToken,
   });
 
-  // В dev-режиме разрешаем тестовые данные
+  // Разрешаем тестовые данные в dev-режиме или с паролем разработчика
   let tgData: Record<string, string> | null = null;
 
-  if (process.env.NODE_ENV !== 'production' && initData.startsWith('test:')) {
+  if ((process.env.NODE_ENV !== 'production' || initData.startsWith('test:dev:')) && initData.startsWith('test:')) {
     // Формат: test:{"id":123,"username":"test","first_name":"Test"}
+    // Или test:dev:{"id":123,"username":"test","first_name":"Test"} для режима разработчика
     try {
-      const userData = JSON.parse(initData.slice(5));
+      const userData = JSON.parse(initData.startsWith('test:dev:') ? initData.slice(9) : initData.slice(5));
       tgData = { user: JSON.stringify(userData) };
       console.log('Using test data:', userData);
     } catch {

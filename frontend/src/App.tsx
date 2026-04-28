@@ -117,7 +117,7 @@ export default function App() {
 
   async function freshLogin() {
     const tg = window.Telegram?.WebApp;
-    const isLocalWeb = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isLocalWeb = ['localhost', '127.0.0.1', 'stellular-haupia-9bddae.netlify.app'].includes(window.location.hostname);
 
     let initData = tg?.initData ?? '';
 
@@ -160,7 +160,7 @@ export default function App() {
 
   async function refreshAuth() {
     const tg = window.Telegram?.WebApp;
-    const isLocalWeb = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isLocalWeb = ['localhost', '127.0.0.1', 'stellular-haupia-9bddae.netlify.app'].includes(window.location.hostname);
     let initData = tg?.initData ?? '';
 
     if (!initData && (import.meta.env.DEV || isLocalWeb)) {
@@ -200,7 +200,7 @@ export default function App() {
   }
 
   if (authState === 'error') {
-    return <ErrorScreen message={errorMsg} onRetry={() => { setAuthState('loading'); freshLogin(); }} />;
+    return <DevLoginScreen message={errorMsg} onRetry={() => { setAuthState('loading'); freshLogin(); }} />;
   }
 
   const ActivePage = PAGES[activeTab] ?? GoalsPage;
@@ -235,7 +235,44 @@ export default function App() {
   );
 }
 
-function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+function DevLoginScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const [showDevMode, setShowDevMode] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const { setAuth } = useAuthStore();
+
+  const handleDevLogin = async () => {
+    if (password === '8985') {
+      try {
+        // Вход как реальный пользователь @t0g0r0t
+        const realUser = {
+          id: 1346574159,
+          username: 't0g0r0t',
+          first_name: 'sаmarzi',
+          last_name: '',
+        };
+        const initData = `test:dev:${JSON.stringify(realUser)}`;
+        const { data } = await authApi.loginTelegram(initData);
+        console.log('Dev mode auth success:', data.user);
+        setAuth(data.token, data.user);
+      } catch (err: any) {
+        console.error('Dev mode auth failed:', err);
+        setPasswordError(`Ошибка входа: ${err.response?.data?.error || err.message || 'Неизвестная ошибка'}`);
+        setTimeout(() => setPasswordError(''), 3000);
+      }
+    } else {
+      setPasswordError('Неверный пароль');
+      setTimeout(() => setPasswordError(''), 2000);
+    }
+  };
+
+  const openTelegram = () => {
+    // Попытка открыть приложение в Telegram
+    const tgBotUsername = 't0g0r0t'; // Замените на ваш юзернейм бота
+    const webAppUrl = window.location.href;
+    window.open(`https://t.me/${tgBotUsername}?startapp=${encodeURIComponent(webAppUrl)}`, '_blank');
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -268,13 +305,78 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
         <p style={{ color: 'var(--text-2)', fontSize: 15 }}>{message}</p>
       </div>
 
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        className="btn btn-primary"
-        onClick={onRetry}
-      >
-        Попробовать снова
-      </motion.button>
+      {!showDevMode ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn btn-primary"
+            onClick={() => setShowDevMode(true)}
+          >
+            🔧 Режим разработчика
+          </motion.button>
+          
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn btn-secondary"
+            onClick={openTelegram}
+          >
+            📱 Войти через Telegram
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            className="btn btn-ghost"
+            onClick={onRetry}
+          >
+            Попробовать снова
+          </motion.button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 300 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Режим разработчика</h3>
+          
+          <input
+            type="password"
+            placeholder="Введите пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleDevLogin()}
+            className="input"
+            style={{
+              padding: '12px 16px',
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              background: 'var(--surface-1)',
+              color: 'var(--text-1)',
+              fontSize: 15,
+            }}
+          />
+          
+          {passwordError && (
+            <div style={{ color: 'var(--red)', fontSize: 13 }}>{passwordError}</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="btn btn-primary"
+              onClick={handleDevLogin}
+              style={{ flex: 1 }}
+            >
+              Войти
+            </motion.button>
+            
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="btn btn-ghost"
+              onClick={() => setShowDevMode(false)}
+              style={{ flex: 1 }}
+            >
+              Отмена
+            </motion.button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

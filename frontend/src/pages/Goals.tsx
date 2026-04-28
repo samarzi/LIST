@@ -914,10 +914,13 @@ function GoalsSkeleton() {
 
 function TasksTracker() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
+  const [newTaskDeadline, setNewTaskDeadline] = useState('');
+  const [subtaskInputs, setSubtaskInputs] = useState<Record<number, string>>({});
 
   useEffect(() => {
     loadTasks();
@@ -925,8 +928,17 @@ function TasksTracker() {
 
   async function loadTasks() {
     try {
-      const { data } = await tasksApi.list();
-      setTasks(data);
+      const [activeRes, archivedRes] = await Promise.all([
+        tasksApi.list(false),
+        tasksApi.list(true),
+      ]);
+      setTasks(activeRes.data);
+      setArchivedTasks(archivedRes.data);
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+      // Устанавливаем пустые массивы при ошибке
+      setTasks([]);
+      setArchivedTasks([]);
     } finally {
       setLoading(false);
     }
@@ -935,10 +947,15 @@ function TasksTracker() {
   async function addTask() {
     if (!newTaskTitle.trim()) return;
     try {
-      const { data } = await tasksApi.create({ title: newTaskTitle, description: newTaskDesc });
-      setTasks([data, ...tasks]);
+      await tasksApi.create({
+        title: newTaskTitle,
+        description: newTaskDesc,
+        deadline: newTaskDeadline ? new Date(newTaskDeadline).toISOString() : undefined,
+      });
+      await loadTasks();
       setNewTaskTitle('');
       setNewTaskDesc('');
+      setNewTaskDeadline('');
       setShowAddModal(false);
     } catch (err) {
       console.error('Failed to add task:', err);
@@ -947,19 +964,51 @@ function TasksTracker() {
 
   async function toggleTask(id: number, completed: boolean) {
     try {
-      const { data } = await tasksApi.update(id, { completed: !completed });
-      setTasks(tasks.map(t => t.id === id ? data : t));
+      await tasksApi.update(id, { completed: !completed });
+      await loadTasks();
     } catch (err) {
       console.error('Failed to toggle task:', err);
     }
   }
 
   async function deleteTask(id: number) {
+    if (!window.confirm('Удалить задачу? Это действие нельзя отменить.')) return;
     try {
       await tasksApi.delete(id);
       setTasks(tasks.filter(t => t.id !== id));
+      setArchivedTasks(archivedTasks.filter(t => t.id !== id));
     } catch (err) {
       console.error('Failed to delete task:', err);
+    }
+  }
+
+  async function addSubtask(taskId: number) {
+    const title = (subtaskInputs[taskId] ?? '').trim();
+    if (!title) return;
+    try {
+      await tasksApi.createSubtask(taskId, title);
+      setSubtaskInputs(prev => ({ ...prev, [taskId]: '' }));
+      await loadTasks();
+    } catch (err) {
+      console.error('Failed to add subtask:', err);
+    }
+  }
+
+  async function toggleSubtask(taskId: number, subtaskId: number, completed: boolean) {
+    try {
+      await tasksApi.updateSubtask(taskId, subtaskId, { completed: !completed });
+      await loadTasks();
+    } catch (err) {
+      console.error('Failed to toggle subtask:', err);
+    }
+  }
+
+  async function deleteSubtask(taskId: number, subtaskId: number) {
+    try {
+      await tasksApi.deleteSubtask(taskId, subtaskId);
+      await loadTasks();
+    } catch (err) {
+      console.error('Failed to delete subtask:', err);
     }
   }
 
@@ -1021,6 +1070,47 @@ function TasksTracker() {
                 {task.description && (
                   <div className="caption text-faint mt-1">{task.description}</div>
                 )}
+                {task.deadline && (
+                  <div className="caption text-faint mt-1">
+                    Дедлайн: {new Date(task.deadline).toLocaleDateString('ru-RU')}
+                  </div>
+                )}
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {task.subtasks.map(subtask => (
+                    <div key={subtask.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        onClick={() => toggleSubtask(task.id, subtask.id, subtask.completed)}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 4,
+                          border: `1px solid ${subtask.completed ? 'var(--green)' : 'var(--border)'}`,
+                          background: subtask.completed ? 'var(--green)' : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {subtask.completed && <Check size={11} color="#fff" />}
+                      </button>
+                      <span className="caption" style={{ flex: 1, textDecoration: subtask.completed ? 'line-through' : 'none' }}>
+                        {subtask.title}
+                      </span>
+                      <button onClick={() => deleteSubtask(task.id, subtask.id)} className="btn-icon btn-ghost">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      className="input"
+                      placeholder="Добавить подзадачу"
+                      value={subtaskInputs[task.id] ?? ''}
+                      onChange={e => setSubtaskInputs(prev => ({ ...prev, [task.id]: e.target.value }))}
+                    />
+                    <button className="btn btn-ghost" onClick={() => addSubtask(task.id)}>+</button>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => deleteTask(task.id)}
@@ -1031,6 +1121,19 @@ function TasksTracker() {
               </button>
             </motion.div>
           ))}
+        </div>
+      )}
+
+      {archivedTasks.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <h3 className="title-sm" style={{ marginBottom: 8 }}>Архив</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {archivedTasks.map(task => (
+              <div key={task.id} className="card" style={{ padding: '10px 12px', opacity: 0.75 }}>
+                <div className="body-sm" style={{ textDecoration: 'line-through' }}>{task.title}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1075,6 +1178,15 @@ function TasksTracker() {
                   rows={3}
                 />
               </div>
+              <div style={{ marginBottom: 16 }}>
+                <div className="label text-faint mb-2">Дедлайн (необязательно)</div>
+                <input
+                  type="date"
+                  className="input"
+                  value={newTaskDeadline}
+                  onChange={e => setNewTaskDeadline(e.target.value)}
+                />
+              </div>
               <button
                 className="btn btn-primary btn-full"
                 onClick={addTask}
@@ -1096,6 +1208,7 @@ function HabitsTracker() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [newHabitDesc, setNewHabitDesc] = useState('');
+  const [newHabitDeadline, setNewHabitDeadline] = useState('');
   const [selectedDays, setSelectedDays] = useState<string[]>(['mon', 'tue', 'wed', 'thu', 'fri']);
 
   const DAY_LABELS: Record<string, string> = {
@@ -1121,11 +1234,13 @@ function HabitsTracker() {
       const { data } = await habitsApi.create({ 
         title: newHabitTitle, 
         description: newHabitDesc,
-        targetDays: selectedDays 
+        targetDays: selectedDays,
+        deadline: newHabitDeadline ? new Date(newHabitDeadline).toISOString() : undefined,
       });
       setHabits([data, ...habits]);
       setNewHabitTitle('');
       setNewHabitDesc('');
+      setNewHabitDeadline('');
       setSelectedDays(['mon', 'tue', 'wed', 'thu', 'fri']);
       setShowAddModal(false);
     } catch (err) {
@@ -1209,6 +1324,11 @@ function HabitsTracker() {
                   {habit.description && (
                     <div className="caption text-faint mt-1">{habit.description}</div>
                   )}
+                  {habit.deadline && (
+                    <div className="caption text-faint mt-1">
+                      Дедлайн: {new Date(habit.deadline).toLocaleDateString('ru-RU')}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => deleteHabit(habit.id)}
@@ -1279,6 +1399,15 @@ function HabitsTracker() {
                   value={newHabitDesc}
                   onChange={e => setNewHabitDesc(e.target.value)}
                   rows={2}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div className="label text-faint mb-2">Дедлайн (необязательно)</div>
+                <input
+                  type="date"
+                  className="input"
+                  value={newHabitDeadline}
+                  onChange={e => setNewHabitDeadline(e.target.value)}
                 />
               </div>
               <div style={{ marginBottom: 16 }}>

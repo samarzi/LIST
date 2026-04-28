@@ -5,7 +5,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use(config => {
@@ -77,18 +77,22 @@ export const uploadApi = {
 
 // Tasks
 export const tasksApi = {
-  list: () => api.get<Task[]>('/tasks'),
-  create: (data: { title: string; description?: string; reminderTime?: string }) => api.post<Task>('/tasks', data),
-  update: (id: number, data: { title?: string; description?: string; completed?: boolean; reminderTime?: string }) =>
+  list: (archived = false) => api.get<Task[]>(`/tasks${archived ? '?archived=true' : ''}`),
+  create: (data: { title: string; description?: string; deadline?: string; reminderTime?: string }) => api.post<Task>('/tasks', data),
+  update: (id: number, data: { title?: string; description?: string; completed?: boolean; deadline?: string | null; reminderTime?: string }) =>
     api.put<Task>(`/tasks/${id}`, data),
+  createSubtask: (taskId: number, title: string) => api.post<TaskSubtask>(`/tasks/${taskId}/subtasks`, { title }),
+  updateSubtask: (taskId: number, subtaskId: number, data: { title?: string; completed?: boolean }) =>
+    api.put<TaskSubtask>(`/tasks/${taskId}/subtasks/${subtaskId}`, data),
+  deleteSubtask: (taskId: number, subtaskId: number) => api.delete<{ success: boolean }>(`/tasks/${taskId}/subtasks/${subtaskId}`),
   delete: (id: number) => api.delete<{ success: boolean }>(`/tasks/${id}`),
 };
 
 // Habits
 export const habitsApi = {
   list: () => api.get<Habit[]>('/habits'),
-  create: (data: { title: string; description?: string; targetDays: string[] }) => api.post<Habit>('/habits', data),
-  update: (id: number, data: { title?: string; description?: string; targetDays?: string[] }) => api.put<Habit>(`/habits/${id}`, data),
+  create: (data: { title: string; description?: string; targetDays: string[]; deadline?: string }) => api.post<Habit>('/habits', data),
+  update: (id: number, data: { title?: string; description?: string; targetDays?: string[]; deadline?: string | null }) => api.put<Habit>(`/habits/${id}`, data),
   delete: (id: number) => api.delete<{ success: boolean }>(`/habits/${id}`),
   toggle: (id: number) => api.post<{ completed: boolean }>(`/habits/${id}/toggle`),
 };
@@ -285,8 +289,19 @@ export interface Task {
   description?: string;
   completed: boolean;
   completedAt?: string;
+  deadline?: string;
   reminderTime?: string;
   reminderSent: boolean;
+  archivedAt?: string;
+  subtasks: TaskSubtask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskSubtask {
+  id: number;
+  title: string;
+  completed: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -296,6 +311,7 @@ export interface Habit {
   title: string;
   description?: string;
   targetDays: string[];
+  deadline?: string;
   reminderTime?: string;
   reminderSent: boolean;
   createdAt: string;

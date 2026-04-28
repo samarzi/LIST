@@ -9,6 +9,7 @@ const CreateHabitSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   targetDays: z.array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'])),
+  deadline: z.string().datetime().optional(),
   reminderTime: z.string().datetime().optional(),
 });
 
@@ -16,6 +17,7 @@ const UpdateHabitSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
   targetDays: z.array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'])).optional(),
+  deadline: z.string().datetime().nullable().optional(),
   reminderTime: z.string().datetime().optional(),
 });
 
@@ -38,6 +40,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   return res.json(habits.map(h => ({
     id: Number(h.id),
     title: h.title,
+    deadline: h.deadline,
     reminderTime: h.reminderTime,
     reminderSent: h.reminderSent,
     description: h.description,
@@ -71,6 +74,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
         title: parsed.data.title,
         description: parsed.data.description,
         targetDays: parsed.data.targetDays,
+        deadline: parsed.data.deadline ? new Date(parsed.data.deadline) : null,
         reminderTime: parsed.data.reminderTime ? new Date(parsed.data.reminderTime) : null,
       },
     });
@@ -81,6 +85,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       title: habit.title,
       description: habit.description,
       targetDays: habit.targetDays,
+      deadline: habit.deadline,
       createdAt: habit.createdAt,
       updatedAt: habit.updatedAt,
       completedToday: false,
@@ -114,6 +119,9 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if (parsed.data.targetDays !== undefined) updateData.targetDays = parsed.data.targetDays;
+  if (parsed.data.deadline !== undefined) {
+    updateData.deadline = parsed.data.deadline ? new Date(parsed.data.deadline) : null;
+  }
   if (parsed.data.reminderTime !== undefined) {
     updateData.reminderTime = parsed.data.reminderTime ? new Date(parsed.data.reminderTime) : null;
     updateData.reminderSent = false; // Reset reminder sent flag when time changes
@@ -129,6 +137,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     title: habit.title,
     description: habit.description,
     targetDays: habit.targetDays,
+    deadline: habit.deadline,
     reminderTime: habit.reminderTime,
     reminderSent: habit.reminderSent,
     createdAt: habit.createdAt,
