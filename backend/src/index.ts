@@ -82,10 +82,8 @@ async function main() {
       await bot.telegram.setWebhook(`${webhookUrl}/webhook/telegram`);
       console.log('Bot webhook set:', `${webhookUrl}/webhook/telegram`);
     } else {
-      bot.launch();
-      console.log('Bot started in polling mode');
-      process.once('SIGINT', () => bot.stop('SIGINT'));
-      process.once('SIGTERM', () => bot.stop('SIGTERM'));
+      // Skip bot polling in development to avoid conflicts
+      console.log('Bot polling disabled in development mode');
     }
   } else {
     console.warn('TELEGRAM_BOT_TOKEN not set — bot disabled');

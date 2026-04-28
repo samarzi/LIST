@@ -21,6 +21,7 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       useAuthStore.getState().logout();
+      window.dispatchEvent(new CustomEvent('list:unauthorized'));
     }
     return Promise.reject(err);
   }

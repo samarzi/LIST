@@ -10,7 +10,7 @@ export const redis = shouldConnect
       maxRetriesPerRequest: null, // BullMQ требует null
       enableReadyCheck: false,
     })
-  : (null as any);
+  : null;
 
 if (shouldConnect && redis) {
   redis.on('connect', () => {
@@ -25,3 +25,7 @@ if (shouldConnect && redis) {
 }
 
 export default redis;
+
+export function isRedisAvailable(client: Redis | null = redis): client is Redis {
+  return client !== null;
+}

@@ -45,37 +45,6 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
   });
 });
 
-// Запрос на смену пары
-router.post('/change', requireAuth, async (req: Request, res: Response) => {
-  const userId = BigInt(req.user!.userId);
-  const { reason } = req.body;
-  if (!reason) return res.status(400).json({ error: 'Reason required' });
-
-  const pair = await prisma.pair.findFirst({
-    where: { partnerId: userId, status: 'active' },
-  });
-  if (!pair) return res.status(404).json({ error: 'No active pair' });
-
-  // Проверка: не чаще 1 раза в 2 недели
-  const recentEnd = await prisma.pair.findFirst({
-    where: {
-      partnerId: userId,
-      status: 'ended',
-      endedAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
-    },
-  });
-  if (recentEnd) {
-    return res.status(429).json({ error: 'Can only change pair once every 2 weeks' });
-  }
-
-  await prisma.pair.update({
-    where: { id: pair.id },
-    data: { status: 'ended', endedAt: new Date() },
-  });
-
-  return res.json({ success: true, message: 'Pair ended, searching for new partner' });
-});
-
 // Партнёры смотрящего (для страницы "Хелпер")
 router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);

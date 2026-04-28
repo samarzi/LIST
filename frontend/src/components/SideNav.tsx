@@ -2,11 +2,11 @@ import { motion } from 'framer-motion';
 import { useUIStore } from '../store';
 
 const NAV_ITEMS = [
-  { id: 'goals', label: 'Цели', icon: '🎯' },
-  { id: 'watch', label: 'Смотрящий', icon: '👁️' },
+  { id: 'path', label: 'Путь', icon: '🎯' },
+  { id: 'helper', label: 'Хелпер', icon: '👁️' },
   { id: 'leaderboard', label: 'Рейтинг', icon: '🏆' },
-  { id: 'lit', label: 'LIT', icon: '💎' },
-  { id: 'teachers', label: 'Учителя', icon: '👨‍🏫' },
+  { id: 'teachers', label: 'Поиск', icon: '👨‍🏫' },
+  { id: 'profile', label: 'Профиль', icon: '💎' },
 ];
 
 export default function SideNav() {

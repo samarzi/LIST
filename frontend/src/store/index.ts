@@ -57,6 +57,6 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>()(set => ({
-  activeTab: 'goals',
+  activeTab: 'path',
   setActiveTab: tab => set({ activeTab: tab }),
 }));

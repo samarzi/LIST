@@ -88,13 +88,21 @@ export default function App() {
     }
 
     authenticate();
+    const onUnauthorized = () => {
+      setAuthState('error');
+      setErrorMsg('Сессия истекла. Войдите заново через Telegram');
+    };
+    window.addEventListener('list:unauthorized', onUnauthorized);
     // Определяем тип устройства
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 768);
     };
     checkDesktop();
     window.addEventListener('resize', checkDesktop);
-    return () => window.removeEventListener('resize', checkDesktop);
+    return () => {
+      window.removeEventListener('resize', checkDesktop);
+      window.removeEventListener('list:unauthorized', onUnauthorized);
+    };
   }, []);
 
   async function authenticate() {
@@ -109,6 +117,7 @@ export default function App() {
 
   async function freshLogin() {
     const tg = window.Telegram?.WebApp;
+    const isLocalWeb = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
     let initData = tg?.initData ?? '';
 
@@ -120,7 +129,7 @@ export default function App() {
     });
 
     // Dev mode fallback — use test: format to authenticate with backend
-    if (!initData && import.meta.env.DEV) {
+    if (!initData && (import.meta.env.DEV || isLocalWeb)) {
       const devUser = {
         id: 999999999, // Fixed telegramId for dev mode
         username: 'devuser',
@@ -151,9 +160,10 @@ export default function App() {
 
   async function refreshAuth() {
     const tg = window.Telegram?.WebApp;
+    const isLocalWeb = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     let initData = tg?.initData ?? '';
 
-    if (!initData && import.meta.env.DEV) {
+    if (!initData && (import.meta.env.DEV || isLocalWeb)) {
       const devUser = {
         id: 999999999, // Fixed telegramId for dev mode
         username: 'devuser',
@@ -171,10 +181,17 @@ export default function App() {
     try {
       const { data } = await authApi.loginTelegram(initData);
       setAuth(data.token, data.user);
-    } catch {
-      // Token refresh failed but we have cached data, still show app
-    } finally {
       setAuthState('authed');
+    } catch {
+      // If refresh fails, keep cached session only when a token exists.
+      // Otherwise force explicit re-login to avoid endless 401 loops.
+      if (useAuthStore.getState().token) {
+        setAuthState('authed');
+      } else {
+        logout();
+        setAuthState('error');
+        setErrorMsg('Сессия истекла. Войдите заново через Telegram');
+      }
     }
   }
 

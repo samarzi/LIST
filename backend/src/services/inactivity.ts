@@ -170,6 +170,10 @@ export async function replacePartner(
  * Должна запускаться по расписанию (cron)
  */
 export async function checkAllPairsForInactivity(): Promise<{ checked: number; frozen: number }> {
+  if (!redis) {
+    return { checked: 0, frozen: 0 };
+  }
+
   const inactivePairs = await findInactivePairs();
   let frozenCount = 0;
 
@@ -235,6 +239,10 @@ export async function handleInactivityDecision(
   userId: bigint,
   decision: 'wait' | 'replace'
 ): Promise<{ success: boolean; message: string }> {
+  if (!redis) {
+    return { success: false, message: 'Функция недоступна: Redis отключен' };
+  }
+
   const inactivityData = await redis.get(`inactivity:pair:${pairId}`);
 
   if (!inactivityData) {

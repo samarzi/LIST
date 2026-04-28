@@ -12,6 +12,20 @@ interface MatchingQueueUser {
 }
 
 let botInstance: Telegraf | null = null;
+const memoryQueue: bigint[] = [];
+
+function addToMemoryQueue(userId: bigint) {
+  if (!memoryQueue.includes(userId)) {
+    memoryQueue.push(userId);
+  }
+}
+
+function removeFromMemoryQueue(userId: bigint) {
+  const idx = memoryQueue.findIndex(id => id === userId);
+  if (idx >= 0) {
+    memoryQueue.splice(idx, 1);
+  }
+}
 
 /**
  * Инициализирует бот для отправки уведомлений
@@ -61,7 +75,12 @@ export async function joinMatchingQueue(userId: bigint): Promise<{ success: bool
       return { success: false, message: 'Пользователь не найден' };
     }
 
-    // Добавляем в Redis для быстрого доступа
+    // Добавляем в Redis для быстрого доступа, при отсутствии Redis используем fallback в памяти
+    if (!redis) {
+      addToMemoryQueue(userId);
+      console.log('User added to memory queue:', userId);
+      return { success: true, message: 'Вы добавлены в очередь поиска партнёра' };
+    }
     await redis.set(`matching:user:${userId}`, '1', 'EX', 3600); // 1 час
     console.log('User added to queue:', userId);
 
@@ -76,6 +95,10 @@ export async function joinMatchingQueue(userId: bigint): Promise<{ success: bool
  * Удаляет пользователя из очереди матчинга
  */
 export async function leaveMatchingQueue(userId: bigint): Promise<void> {
+  if (!redis) {
+    removeFromMemoryQueue(userId);
+    return;
+  }
   await redis.del(`matching:user:${userId}`);
 }
 
@@ -85,6 +108,30 @@ export async function leaveMatchingQueue(userId: bigint): Promise<void> {
  */
 async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
   try {
+    if (!redis) {
+      if (memoryQueue.length === 0) {
+        return [];
+      }
+      const users = await prisma.user.findMany({
+        where: {
+          id: { in: memoryQueue },
+        },
+        select: {
+          id: true,
+          telegramId: true,
+          username: true,
+          displayName: true,
+          level: true,
+          rating: true,
+        },
+      });
+
+      const byId = new Map(users.map(u => [u.id.toString(), u]));
+      return memoryQueue
+        .map(id => byId.get(id.toString()))
+        .filter((u): u is NonNullable<typeof u> => Boolean(u))
+        .map(u => ({ ...u, rating: Number(u.rating) }));
+    }
     // Сначала получаем всех пользователей в Redis очереди
     const keys = await redis.keys('matching:user:*');
     console.log('Redis keys found:', keys.length);
@@ -167,7 +214,8 @@ async function createPair(partner: MatchingQueueUser, watcher: MatchingQueueUser
 
   // Удаляем только партнера из очереди матчинга
   // Смотрящий остается в очереди как потенциальный партнер
-  await redis.del(`matching:user:${partner.id}`);
+  if (redis) await redis.del(`matching:user:${partner.id}`);
+  else removeFromMemoryQueue(partner.id);
 
   // Отправляем уведомления обоим пользователям
   if (botInstance) {

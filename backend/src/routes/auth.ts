@@ -30,7 +30,7 @@ router.post('/telegram', async (req: Request, res: Response) => {
   // В dev-режиме разрешаем тестовые данные
   let tgData: Record<string, string> | null = null;
 
-  if (process.env.NODE_ENV === 'development' && initData.startsWith('test:')) {
+  if (process.env.NODE_ENV !== 'production' && initData.startsWith('test:')) {
     // Формат: test:{"id":123,"username":"test","first_name":"Test"}
     try {
       const userData = JSON.parse(initData.slice(5));
@@ -113,8 +113,10 @@ router.post('/telegram', async (req: Request, res: Response) => {
   if (isNewUser) {
     try {
       // Добавляем в Redis для быстрого доступа
-      await redis.set(`matching:user:${user.id}`, '1', 'EX', 3600); // 1 час
-      console.log('User added to matching queue automatically:', user.id);
+      if (redis) {
+        await redis.set(`matching:user:${user.id}`, '1', 'EX', 3600); // 1 час
+        console.log('User added to matching queue automatically:', user.id);
+      }
     } catch (error) {
       console.error('Failed to add user to matching queue:', error);
     }

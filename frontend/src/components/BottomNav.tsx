@@ -14,7 +14,10 @@ export default function BottomNav() {
   const { activeTab, setActiveTab } = useUIStore();
 
   const handleTab = (id: string) => {
-    window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+    const tg = window.Telegram?.WebApp;
+    if (tg?.HapticFeedback && Number(tg.version) >= 6.1) {
+      tg.HapticFeedback.selectionChanged();
+    }
     setActiveTab(id);
   };
 
