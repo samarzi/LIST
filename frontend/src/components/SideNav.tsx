@@ -2,11 +2,12 @@ import { motion } from 'framer-motion';
 import { useUIStore } from '../store';
 
 const NAV_ITEMS = [
-  { id: 'path', label: 'Путь', icon: '🎯' },
-  { id: 'helper', label: 'Хелпер', icon: '👁️' },
-  { id: 'leaderboard', label: 'Рейтинг', icon: '🏆' },
-  { id: 'teachers', label: 'Поиск', icon: '👨‍🏫' },
-  { id: 'profile', label: 'Профиль', icon: '💎' },
+  { id: 'path',        label: 'Путь',        icon: '🎯' },
+  { id: 'helper',      label: 'Хелпер',      icon: '👁️' },
+  { id: 'voting',      label: 'Голосование', icon: '🗳️' },
+  { id: 'leaderboard', label: 'Рейтинг',     icon: '🏆' },
+  { id: 'teachers',    label: 'Учителя',     icon: '👨‍🏫' },
+  { id: 'profile',     label: 'Профиль',     icon: '💎' },
 ];
 
 export default function SideNav() {
@@ -51,7 +52,6 @@ export default function SideNav() {
         ))}
       </nav>
 
-      {/* Footer */}
       <div className="p-4 border-t border-[var(--border)]">
         <div className="text-xs text-[var(--text-3)] text-center">
           <p>LIST v1.0</p>

@@ -66,80 +66,61 @@ async function getExcludedUserIdsForPartner(userId: bigint): Promise<bigint[]> {
 async function findWatcherCandidateForUser(user: MatchingQueueUser): Promise<MatchingQueueUser | null> {
   console.log('=== findWatcherCandidateForUser called ===');
   console.log('Looking for watcher for user:', user.id.toString(), 'username:', user.username);
-  
+
   const excludedIds = await getExcludedUserIdsForPartner(user.id);
   console.log('Excluded IDs:', excludedIds.map(id => id.toString()));
-  
+
+  // Collect watcher IDs that already watch someone (one partner per watcher rule)
+  const alreadyWatchingPairs = await prisma.pair.findMany({
+    where: { status: 'active' },
+    select: { watcherId: true },
+  });
+  const alreadyWatchingIds = new Set(alreadyWatchingPairs.map(p => p.watcherId));
+
   const waitingUsers = await getWaitingUsers();
   console.log('Waiting users count:', waitingUsers.length);
-  console.log('Waiting users:', waitingUsers.map(u => ({ id: u.id.toString(), username: u.username })));
 
   for (const candidate of waitingUsers) {
-    console.log('Checking candidate:', candidate.id.toString(), 'username:', candidate.username);
-    
-    if (excludedIds.includes(candidate.id)) {
-      console.log('  -> Skipped: in excluded list');
+    if (excludedIds.includes(candidate.id)) continue;
+    // Skip if candidate already watches someone
+    if (alreadyWatchingIds.has(candidate.id)) {
+      console.log('  -> Skipped: already has a partner to watch');
       continue;
     }
-
     const pairExists = await prisma.pair.findFirst({
-      where: {
-        partnerId: user.id,
-        watcherId: candidate.id,
-        status: 'active',
-      },
+      where: { partnerId: user.id, watcherId: candidate.id, status: 'active' },
     });
-    if (pairExists) {
-      console.log('  -> Skipped: pair already exists');
-      continue;
-    }
+    if (pairExists) continue;
 
     const compatible = await areCompatible(user, candidate);
-    console.log('  -> Compatible:', compatible);
     if (compatible) {
-      console.log('  -> FOUND MATCH!');
+      console.log('  -> FOUND MATCH:', candidate.id.toString());
       return candidate;
     }
   }
-  console.log('No candidate found in waiting users');
 
-  // Fallback: подбираем любого зарегистрированного пользователя, не из исключений
-  console.log('Trying fallback: searching DB for any available user...');
+  // Fallback: search DB
+  console.log('Trying fallback: searching DB...');
   const dbUsers = await prisma.user.findMany({
     where: {
       id: { notIn: excludedIds },
+      // Only users who don't already watch someone
+      watcherPairs: { none: { status: 'active' } },
     },
-    select: {
-      id: true,
-      telegramId: true,
-      username: true,
-      displayName: true,
-      level: true,
-      rating: true,
-    },
+    select: { id: true, telegramId: true, username: true, displayName: true, level: true, rating: true },
     take: 50,
   });
-  console.log('DB users found (excluding self):', dbUsers.length);
 
   for (const candidate of dbUsers) {
-    console.log('Checking DB candidate:', candidate.id.toString());
     const pairExists = await prisma.pair.findFirst({
-      where: {
-        partnerId: user.id,
-        watcherId: candidate.id,
-        status: 'active',
-      },
+      where: { partnerId: user.id, watcherId: candidate.id, status: 'active' },
     });
-    if (pairExists) {
-      console.log('  -> Skipped: pair exists');
-      continue;
-    }
+    if (pairExists) continue;
 
     const candidateNormalized: MatchingQueueUser = { ...candidate, rating: Number(candidate.rating) };
     const compatible = await areCompatible(user, candidateNormalized);
-    console.log('  -> Compatible:', compatible);
     if (compatible) {
-      console.log('  -> FOUND MATCH in fallback!');
+      console.log('  -> FOUND MATCH in fallback:', candidate.id.toString());
       return candidateNormalized;
     }
   }
@@ -434,29 +415,28 @@ async function matchUserAsWatcher(
 ): Promise<{ matched: boolean; partner?: MatchingQueueUser }> {
   console.log('=== matchUserAsWatcher called for:', watcher.id.toString(), '===');
 
-  // 1. Find all users already paired with this watcher (exclude them)
-  const existingPairs = await prisma.pair.findMany({
+  // Enforce: one partner per watcher. If this user already watches someone, don't match again.
+  const existingWatcherPair = await prisma.pair.findFirst({
     where: { watcherId: watcher.id, status: 'active' },
-    select: { partnerId: true },
   });
-  const alreadyWatching = new Set(existingPairs.map(p => p.partnerId));
+  if (existingWatcherPair) {
+    console.log('matchUserAsWatcher: watcher already has a partner, skipping');
+    return { matched: false };
+  }
 
-  // 2. Find all users who already have any active watcher
+  // Find all users who already have any active watcher
   const pairedAsPartner = await prisma.pair.findMany({
     where: { status: 'active' },
     select: { partnerId: true },
   });
   const hasWatcher = new Set(pairedAsPartner.map(p => p.partnerId));
 
-  // 3. Find first eligible user: not watcher themselves, no watcher yet, not already watched by this watcher
+  // Find first eligible user: not watcher themselves, no watcher yet
   const candidate = await prisma.user.findFirst({
     where: {
       id: {
         not: watcher.id,
-        notIn: [
-          ...Array.from(alreadyWatching),
-          ...Array.from(hasWatcher),
-        ],
+        notIn: Array.from(hasWatcher),
       },
     },
     select: { id: true, telegramId: true, username: true, displayName: true, level: true, rating: true },

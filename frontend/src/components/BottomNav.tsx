@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import { Target, Eye, Trophy, Zap, BookOpen } from 'lucide-react';
+import { Target, Eye, Trophy, Zap, Vote } from 'lucide-react';
 import { useUIStore } from '../store';
 
 const tabs = [
-  { id: 'path',        label: 'Путь',     icon: Target },
-  { id: 'helper',      label: 'Хелпер',   icon: Eye },
-  { id: 'leaderboard', label: 'Рейтинг',  icon: Trophy },
-  { id: 'teachers',    label: 'Поиск',    icon: BookOpen },
-  { id: 'profile',     label: 'Профиль',  icon: Zap },
+  { id: 'path',        label: 'Путь',        icon: Target },
+  { id: 'helper',      label: 'Хелпер',      icon: Eye },
+  { id: 'voting',      label: 'Голосование', icon: Vote },
+  { id: 'leaderboard', label: 'Рейтинг',     icon: Trophy },
+  { id: 'profile',     label: 'Профиль',     icon: Zap },
 ];
 
 export default function BottomNav() {
@@ -31,11 +31,11 @@ export default function BottomNav() {
         width: '100%',
         maxWidth: 540,
         height: 'var(--nav-h)',
-        background: 'rgba(12, 12, 16, 0.96)',
-        backdropFilter: 'blur(32px)',
-        WebkitBackdropFilter: 'blur(32px)',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        boxShadow: '0 -1px 0 rgba(99,102,241,0.08)',
+        background: 'rgba(10, 10, 14, 0.92)',
+        backdropFilter: 'blur(32px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 -1px 0 rgba(99,102,241,0.08), 0 -8px 24px rgba(0,0,0,0.3)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-around',
@@ -92,14 +92,14 @@ export default function BottomNav() {
               style={{ position: 'relative', zIndex: 1 }}
             >
               <Icon
-                size={21}
+                size={20}
                 strokeWidth={active ? 2.3 : 1.7}
                 color={active ? '#a5b4fc' : 'rgba(255,255,255,0.32)'}
               />
             </motion.div>
             <span
               style={{
-                fontSize: 9.5,
+                fontSize: 9,
                 fontWeight: active ? 700 : 400,
                 color: active ? '#a5b4fc' : 'rgba(255,255,255,0.32)',
                 letterSpacing: active ? 0.1 : 0,

@@ -49,7 +49,9 @@ export default function ProfilePage() {
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(0,0,0,0.8)',
+              background: 'rgba(5,5,8,0.75)',
+              backdropFilter: 'blur(28px) saturate(140%)',
+              WebkitBackdropFilter: 'blur(28px) saturate(140%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -65,11 +67,15 @@ export default function ProfilePage() {
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={e => e.stopPropagation()}
               style={{
-                background: 'var(--surface)',
+                background: 'rgba(22, 22, 32, 0.92)',
+                backdropFilter: 'blur(40px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(40px) saturate(160%)',
+                border: '1px solid rgba(255,255,255,0.12)',
                 borderRadius: 20,
                 padding: 24,
                 width: '100%',
                 maxWidth: 380,
+                boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
