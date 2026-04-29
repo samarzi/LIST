@@ -58,10 +58,11 @@ router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
 
   const pairs = await prisma.pair.findMany({
     where: { watcherId: userId, status: 'active' },
-    include: {
+    select: {
+      id: true,
       partner: {
-        select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true },
-        include: {
+        select: {
+          id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true,
           goals: {
             where: { status: { in: ['in_progress', 'on_review', 'on_check', 'on_voting'] } },
             select: {
@@ -75,22 +76,16 @@ router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
     },
   });
 
-  return res.json(pairs.map(p => {
-    const partnerGoals = (p.partner as unknown as {
-      goals: {
-        id: bigint; title: string; deadline: Date; status: string; successCriteria: string;
-        _count: { checkins: number };
-        proofs: { description: string; mediaUrls: string[] }[];
-      }[] | undefined
-    }).goals || [];
-
-    return {
+  return res.json(pairs.map(p => ({
       pairId: Number(p.id),
       partner: {
-        ...p.partner,
         id: Number(p.partner.id),
+        username: p.partner.username,
+        displayName: p.partner.displayName,
+        photoUrl: p.partner.photoUrl,
+        level: p.partner.level,
         rating: Number(p.partner.rating),
-        activeGoals: partnerGoals.map((g) => ({
+        activeGoals: p.partner.goals.map((g) => ({
           id: Number(g.id),
           title: g.title,
           successCriteria: g.successCriteria,
@@ -100,8 +95,7 @@ router.get('/my-partners', requireAuth, async (req: Request, res: Response) => {
           latestProof: g.proofs[0] ?? null,
         })),
       },
-    };
-  }));
+    })));
 });
 
 // Вход в очередь матчинга
