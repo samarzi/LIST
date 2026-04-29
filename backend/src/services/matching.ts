@@ -401,13 +401,13 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
 
     const userData = { ...user, rating: Number(user.rating) };
 
-    // If user already has a watcher, they joined as a potential watcher — skip finding one for them
+    // If user already has a watcher, try to match them AS a watcher for someone else
     const alreadyPartner = await prisma.pair.findFirst({
       where: { partnerId: userId, status: 'active' },
     });
     if (alreadyPartner) {
-      console.log('User already has a watcher, skipping matchUser for:', userId.toString());
-      return { matched: false };
+      console.log('User already has a watcher — trying to match them as a watcher for someone');
+      return matchUserAsWatcher(userData);
     }
 
     const candidate = await findWatcherCandidateForUser(userData);
@@ -423,4 +423,66 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
     console.error('Error in matchUser:', error);
     return { matched: false };
   }
+}
+
+/**
+ * Matches a user as a watcher for someone who doesn't have one yet
+ */
+async function matchUserAsWatcher(
+  watcher: MatchingQueueUser,
+): Promise<{ matched: boolean; partner?: MatchingQueueUser }> {
+  console.log('=== matchUserAsWatcher called for:', watcher.id.toString(), '===');
+
+  // Find someone in the queue who needs a watcher
+  const waitingUsers = await getWaitingUsers();
+  const candidates = waitingUsers.filter(u => u.id !== watcher.id);
+
+  for (const partner of candidates) {
+    const alreadyHasWatcher = await prisma.pair.findFirst({
+      where: { partnerId: partner.id, status: 'active' },
+    });
+    if (alreadyHasWatcher) continue;
+
+    const pairExists = await prisma.pair.findFirst({
+      where: { partnerId: partner.id, watcherId: watcher.id, status: 'active' },
+    });
+    if (pairExists) continue;
+
+    const compatible = await areCompatible(partner, watcher);
+    if (compatible) {
+      console.log('matchUserAsWatcher: creating pair partner=', partner.id.toString(), 'watcher=', watcher.id.toString());
+      await createPair(partner, watcher);
+      return { matched: true, partner };
+    }
+  }
+
+  // Fallback: find any registered user without a watcher
+  const allUsers = await prisma.user.findMany({
+    where: { id: { not: watcher.id } },
+    select: { id: true, telegramId: true, username: true, displayName: true, level: true, rating: true },
+    take: 50,
+  });
+
+  for (const p of allUsers) {
+    const alreadyHasWatcher = await prisma.pair.findFirst({
+      where: { partnerId: p.id, status: 'active' },
+    });
+    if (alreadyHasWatcher) continue;
+
+    const pairExists = await prisma.pair.findFirst({
+      where: { partnerId: p.id, watcherId: watcher.id, status: 'active' },
+    });
+    if (pairExists) continue;
+
+    const partnerData: MatchingQueueUser = { ...p, rating: Number(p.rating) };
+    const compatible = await areCompatible(partnerData, watcher);
+    if (compatible) {
+      console.log('matchUserAsWatcher fallback: partner=', p.id.toString(), 'watcher=', watcher.id.toString());
+      await createPair(partnerData, watcher);
+      return { matched: true, partner: partnerData };
+    }
+  }
+
+  console.log('matchUserAsWatcher: no suitable partner found');
+  return { matched: false };
 }
