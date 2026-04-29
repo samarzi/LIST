@@ -2,42 +2,39 @@ import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
 import { z } from 'zod';
+import { enqueueNotification } from '../services/queue';
 
 const router = Router();
 
 const CreateMessageSchema = z.object({
   content: z.string().min(1).max(1000),
-  type: z.enum(['question', 'improvement', 'feedback']).default('question'),
+  type: z.enum(['question', 'improvement', 'feedback', 'text']).default('text'),
 });
 
-// Get messages for current pair
+async function findActivePair(userId: bigint) {
+  return prisma.pair.findFirst({
+    where: {
+      status: 'active',
+      OR: [{ partnerId: userId }, { watcherId: userId }],
+    },
+  });
+}
+
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
 
-  // Find current pair where user is partner
-  const pair = await prisma.pair.findFirst({
-    where: {
-      partnerId: userId,
-      status: 'active',
-    },
-  });
-
-  if (!pair) {
-    return res.json([]);
-  }
+  const pair = await findActivePair(userId);
+  if (!pair) return res.json([]);
 
   const messages = await prisma.pairMessage.findMany({
     where: { pairId: pair.id },
     include: {
       sender: {
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-        },
+        select: { id: true, username: true, displayName: true },
       },
     },
     orderBy: { createdAt: 'asc' },
+    take: 100,
   });
 
   return res.json(messages.map(m => ({
@@ -54,26 +51,13 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   })));
 });
 
-// Create a new message
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
   const parsed = CreateMessageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.flatten() });
-  }
-
-  // Find current pair where user is partner
-  const pair = await prisma.pair.findFirst({
-    where: {
-      partnerId: userId,
-      status: 'active',
-    },
-  });
-
-  if (!pair) {
-    return res.status(404).json({ error: 'No active pair found' });
-  }
+  const pair = await findActivePair(userId);
+  if (!pair) return res.status(404).json({ error: 'No active pair found' });
 
   const message = await prisma.pairMessage.create({
     data: {
@@ -83,18 +67,23 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       type: parsed.data.type,
     },
     include: {
-      sender: {
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-        },
-      },
+      sender: { select: { id: true, username: true, displayName: true } },
     },
   });
 
-  // Send notification to watcher via Telegram bot
-  // TODO: Implement Telegram notification
+  // Notify the other person in the pair
+  const recipientId = pair.partnerId === userId ? pair.watcherId : pair.partnerId;
+  const recipient = await prisma.user.findUnique({
+    where: { id: recipientId },
+    select: { telegramId: true, displayName: true, firstName: true },
+  });
+  if (recipient) {
+    const senderName = message.sender.displayName ?? message.sender.username ?? 'Партнёр';
+    await enqueueNotification(
+      recipient.telegramId,
+      `💬 *${senderName}:* ${parsed.data.content}`,
+    );
+  }
 
   return res.status(201).json({
     id: Number(message.id),

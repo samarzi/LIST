@@ -97,6 +97,12 @@ export const habitsApi = {
   toggle: (id: number) => api.post<{ completed: boolean }>(`/habits/${id}/toggle`),
 };
 
+// Reports
+export const reportsApi = {
+  create: (goalId: number, reason: string) =>
+    api.post<{ id: number }>('/reports', { goalId, reason }),
+};
+
 // Pair Messages
 export interface PairMessage {
   id: number;
@@ -123,6 +129,7 @@ export const pairsApi = {
   changePair: (reason: string) => api.post('/pairs/change', { reason }),
   joinQueue: () => api.post<{ success: boolean; message: string; matched: boolean; partner?: any }>('/pairs/queue/join'),
   leaveQueue: () => api.post<{ success: boolean; message: string }>('/pairs/queue/leave'),
+  inactivityReturn: () => api.post<{ success: boolean; message: string }>('/pairs/inactivity/return'),
 };
 
 // LIT
@@ -255,6 +262,7 @@ export interface PairStatus {
     createdAt: string;
     partner: Pick<User, 'id' | 'username' | 'displayName' | 'photoUrl' | 'level' | 'rating'>;
   } | null;
+  frozenPair: { id: number; status: string } | null;
   inQueue: boolean;
 }
 

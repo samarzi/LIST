@@ -1,4 +1,13 @@
 import 'dotenv/config';
+
+// Prevent unhandled promise rejections from crashing the process
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err: Error) => {
+  console.error('[uncaughtException]', err);
+});
+
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';

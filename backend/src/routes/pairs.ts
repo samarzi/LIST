@@ -9,7 +9,7 @@ const router = Router();
 router.get('/current', requireAuth, async (req: Request, res: Response) => {
   const userId = BigInt(req.user!.userId);
 
-  const [asPartner, asWatcher] = await Promise.all([
+  const [asPartner, asWatcher, frozenPair] = await Promise.all([
     prisma.pair.findFirst({
       where: { partnerId: userId, status: 'active' },
       include: {
@@ -20,6 +20,12 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
       where: { watcherId: userId, status: 'active' },
       include: {
         partner: { select: { id: true, username: true, displayName: true, photoUrl: true, level: true, rating: true } },
+      },
+    }),
+    prisma.pair.findFirst({
+      where: {
+        OR: [{ partnerId: userId }, { watcherId: userId }],
+        status: 'frozen',
       },
     }),
   ]);
@@ -41,7 +47,8 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
           partner: { ...asWatcher.partner, id: Number(asWatcher.partner.id), rating: Number(asWatcher.partner.rating) },
         }
       : null,
-    inQueue: !asPartner && !asWatcher,
+    frozenPair: frozenPair ? { id: Number(frozenPair.id), status: 'frozen' } : null,
+    inQueue: !asPartner && !asWatcher && !frozenPair,
   });
 });
 

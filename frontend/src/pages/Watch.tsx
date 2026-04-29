@@ -4,7 +4,7 @@ import {
   Eye, Clock, TrendingUp, AlertCircle, X, ChevronRight, Flame,
   CheckCircle2, XCircle, FileText, Vote, RefreshCw, ExternalLink, User, MessageSquare, Info, Send,
 } from 'lucide-react';
-import { pairsApi, goalsApi, votingApi, pairMessagesApi, type WatcherStudent, type PairStatus, type PairMessage } from '../api/client';
+import { pairsApi, goalsApi, votingApi, pairMessagesApi, reportsApi, type WatcherStudent, type PairStatus, type PairMessage } from '../api/client';
 import { useUIStore } from '../store';
 
 const DIFFICULTY_HINTS: Record<number, { label: string; color: string; desc: string }> = {
@@ -369,6 +369,21 @@ export default function WatchPage() {
         )}
         {activeTab === 'watcher' && (
           <>
+            {/* Frozen pair banner */}
+            {pairStatus?.frozenPair && !pairStatus?.asPartner && (
+              <FrozenPairBanner onReturn={async () => {
+                try {
+                  await pairsApi.inactivityReturn();
+                  window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+                  const { data } = await pairsApi.current();
+                  setPairStatus(data);
+                } catch (err) {
+                  console.error('Failed to return from freeze:', err);
+                  window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+                }
+              }} />
+            )}
+
             {/* My watcher */}
             {pairStatus?.asPartner ? (
               <div style={{ padding: '0 16px' }}>
@@ -718,12 +733,28 @@ function ProofConfirmModal({
 }) {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<'view' | 'reject'>('view');
+  const [step, setStep] = useState<'view' | 'reject' | 'report'>('view');
+  const [reportReason, setReportReason] = useState('');
+  const [reportSent, setReportSent] = useState(false);
 
   async function decide(confirmed: boolean) {
     setLoading(true);
     try {
       await onDecide(confirmed, note || undefined);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitReport() {
+    if (reportReason.trim().length < 10) return;
+    setLoading(true);
+    try {
+      await reportsApi.create(goal.id, reportReason.trim());
+      setReportSent(true);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch (err) {
+      console.error('Failed to submit report:', err);
     } finally {
       setLoading(false);
     }
@@ -828,26 +859,86 @@ function ProofConfirmModal({
           </div>
         )}
 
+        {step === 'report' && (
+          <div style={{ marginBottom: 16 }}>
+            {reportSent ? (
+              <div
+                style={{
+                  padding: '12px 14px', background: 'rgba(48,209,88,0.06)',
+                  border: '1px solid rgba(48,209,88,0.2)', borderRadius: 12,
+                  fontSize: 13, color: 'var(--green)', textAlign: 'center',
+                }}
+              >
+                Жалоба отправлена на рассмотрение
+              </div>
+            ) : (
+              <>
+                <div className="label text-faint mb-2">Причина жалобы (мин. 10 символов)</div>
+                <textarea
+                  className="input"
+                  placeholder="Опиши, что не так с доказательством..."
+                  value={reportReason}
+                  onChange={e => setReportReason(e.target.value)}
+                  rows={3}
+                />
+              </>
+            )}
+          </div>
+        )}
+
         {step === 'view' ? (
+          <>
+            <div className="flex gap-2">
+              <button
+                className="btn btn-ghost"
+                style={{ flex: 1, color: 'var(--red)', borderColor: 'rgba(255,69,58,0.3)' }}
+                onClick={() => setStep('reject')}
+                disabled={loading}
+              >
+                <XCircle size={16} />
+                Отклонить
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, background: 'linear-gradient(135deg, #30d158, #34c759)' }}
+                onClick={() => decide(true)}
+                disabled={loading}
+              >
+                <CheckCircle2 size={16} />
+                {loading ? 'Отправляю...' : 'Подтвердить'}
+              </button>
+            </div>
+            <button
+              onClick={() => setStep('report')}
+              style={{
+                width: '100%', marginTop: 10, background: 'none', border: 'none',
+                fontSize: 12, color: 'var(--text-3)', cursor: 'pointer', padding: '4px 0',
+              }}
+            >
+              Пожаловаться на нарушение
+            </button>
+          </>
+        ) : step === 'report' ? (
           <div className="flex gap-2">
-            <button
-              className="btn btn-ghost"
-              style={{ flex: 1, color: 'var(--red)', borderColor: 'rgba(255,69,58,0.3)' }}
-              onClick={() => setStep('reject')}
-              disabled={loading}
-            >
-              <XCircle size={16} />
-              Отклонить
+            <button className="btn btn-ghost" style={{ flex: 0.4 }} onClick={() => setStep('view')} disabled={loading || reportSent}>
+              Назад
             </button>
-            <button
-              className="btn btn-primary"
-              style={{ flex: 1, background: 'linear-gradient(135deg, #30d158, #34c759)' }}
-              onClick={() => decide(true)}
-              disabled={loading}
-            >
-              <CheckCircle2 size={16} />
-              {loading ? 'Отправляю...' : 'Подтвердить'}
-            </button>
+            {reportSent ? (
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={onClose}>Закрыть</button>
+            ) : (
+              <button
+                className="btn"
+                style={{
+                  flex: 1, background: 'rgba(255,69,58,0.12)', color: 'var(--red)',
+                  border: '1px solid rgba(255,69,58,0.3)', borderRadius: 12,
+                  opacity: reportReason.trim().length < 10 ? 0.5 : 1,
+                }}
+                onClick={submitReport}
+                disabled={loading || reportReason.trim().length < 10}
+              >
+                {loading ? 'Отправляю...' : 'Отправить жалобу'}
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex gap-2">
@@ -1128,6 +1219,60 @@ function EmptyState() {
       <div>
         <h3 className="title-sm">Нет учеников</h3>
         <p className="body-sm text-faint mt-2">После матчинга здесь появятся твои ученики</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function FrozenPairBanner({ onReturn }: { onReturn: () => Promise<void> }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleReturn() {
+    setLoading(true);
+    try {
+      await onReturn();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{ margin: '0 16px 16px' }}
+    >
+      <div
+        style={{
+          padding: '14px 16px',
+          background: 'rgba(90,120,200,0.08)',
+          border: '1px solid rgba(90,120,200,0.25)',
+          borderRadius: 14,
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#7b9cff', marginBottom: 4 }}>
+          Пара заморожена
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.5, marginBottom: 12 }}>
+          Твоя пара была заморожена из-за неактивности. Вернись, чтобы восстановить её.
+        </div>
+        <button
+          onClick={handleReturn}
+          disabled={loading}
+          style={{
+            padding: '8px 16px',
+            background: '#7b9cff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {loading ? 'Восстанавливаю...' : 'Вернуться'}
+        </button>
       </div>
     </motion.div>
   );

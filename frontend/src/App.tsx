@@ -200,7 +200,13 @@ export default function App() {
   }
 
   if (authState === 'error') {
-    return <DevLoginScreen message={errorMsg} onRetry={() => { setAuthState('loading'); freshLogin(); }} />;
+    return (
+      <DevLoginScreen
+        message={errorMsg}
+        onRetry={() => { setAuthState('loading'); freshLogin(); }}
+        onSuccess={() => setAuthState('authed')}
+      />
+    );
   }
 
   const ActivePage = PAGES[activeTab] ?? GoalsPage;
@@ -235,7 +241,7 @@ export default function App() {
   );
 }
 
-function DevLoginScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+function DevLoginScreen({ message, onRetry, onSuccess }: { message: string; onRetry: () => void; onSuccess: () => void }) {
   const [showDevMode, setShowDevMode] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -255,6 +261,7 @@ function DevLoginScreen({ message, onRetry }: { message: string; onRetry: () => 
         const { data } = await authApi.loginTelegram(initData);
         console.log('Dev mode auth success:', data.user);
         setAuth(data.token, data.user);
+        onSuccess();
       } catch (err: any) {
         console.error('Dev mode auth failed:', err);
         setPasswordError(`Ошибка входа: ${err.response?.data?.error || err.message || 'Неизвестная ошибка'}`);

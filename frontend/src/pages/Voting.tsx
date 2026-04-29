@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Vote, CheckCircle2, ExternalLink, ChevronRight, Star } from 'lucide-react';
-import { votingApi, type VotingSession } from '../api/client';
+import { Vote, CheckCircle2, ExternalLink, ChevronRight, Star, AlertTriangle } from 'lucide-react';
+import { votingApi, reportsApi, type VotingSession } from '../api/client';
 
 const GOAL_LABELS: [number, string][] = [
   [0, 'Невалид'],
@@ -89,6 +89,24 @@ function VotingForm({ session, onVoted }: { session: VotingSession; onVoted: () 
   const [touchedGoal, setTouchedGoal] = useState(false);
   const [touchedWatcher, setTouchedWatcher] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSent, setReportSent] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  async function submitReport() {
+    if (reportReason.trim().length < 10) return;
+    setReportLoading(true);
+    try {
+      await reportsApi.create(session.goalId, reportReason.trim());
+      setReportSent(true);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch {
+      // silently ignore duplicate reports
+    } finally {
+      setReportLoading(false);
+    }
+  }
 
   const canSubmit = touchedGoal && touchedWatcher && !submitting;
 
@@ -245,6 +263,69 @@ function VotingForm({ session, onVoted }: { session: VotingSession; onVoted: () 
         <p className="caption text-faint text-center" style={{ marginTop: 8 }}>
           Нужно оценить и цель, и смотрящего
         </p>
+      )}
+
+      {/* Report section */}
+      {!showReport ? (
+        <button
+          onClick={() => setShowReport(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4, marginTop: 16,
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 12, color: 'var(--text-3)', padding: '4px 0', width: '100%', justifyContent: 'center',
+          }}
+        >
+          <AlertTriangle size={12} />
+          Пожаловаться на нарушение
+        </button>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          style={{ marginTop: 16 }}
+        >
+          {reportSent ? (
+            <div
+              style={{
+                padding: '10px 14px', background: 'rgba(48,209,88,0.06)',
+                border: '1px solid rgba(48,209,88,0.15)', borderRadius: 12,
+                fontSize: 13, color: 'var(--green)', textAlign: 'center',
+              }}
+            >
+              Жалоба отправлена на рассмотрение
+            </div>
+          ) : (
+            <>
+              <div className="label text-faint mb-2">Причина жалобы (мин. 10 символов)</div>
+              <textarea
+                className="input"
+                placeholder="Опиши нарушение..."
+                value={reportReason}
+                onChange={e => setReportReason(e.target.value)}
+                rows={2}
+                style={{ marginBottom: 8, fontSize: 13 }}
+              />
+              <div className="flex gap-2">
+                <button className="btn btn-ghost" style={{ flex: 0.4, fontSize: 13 }} onClick={() => setShowReport(false)}>
+                  Отмена
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1, fontSize: 13,
+                    background: 'rgba(255,69,58,0.1)', color: 'var(--red)',
+                    border: '1px solid rgba(255,69,58,0.25)', borderRadius: 10,
+                    opacity: reportReason.trim().length < 10 ? 0.5 : 1,
+                  }}
+                  onClick={submitReport}
+                  disabled={reportLoading || reportReason.trim().length < 10}
+                >
+                  {reportLoading ? 'Отправляю...' : 'Отправить'}
+                </button>
+              </div>
+            </>
+          )}
+        </motion.div>
       )}
     </motion.div>
   );
