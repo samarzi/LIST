@@ -155,19 +155,6 @@ export async function joinMatchingQueue(userId: bigint): Promise<{ success: bool
   console.log('joinMatchingQueue called for userId:', userId);
   
   try {
-    // Проверяем, есть ли уже активная пара как партнер (нельзя быть партнером дважды)
-    const existingPartnerPair = await prisma.pair.findFirst({
-      where: {
-        partnerId: userId,
-        status: 'active',
-      },
-    });
-
-    if (existingPartnerPair) {
-      console.log('User already has partner pair:', userId);
-      return { success: false, message: 'Вы уже партнер в активной паре' };
-    }
-
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -241,27 +228,7 @@ async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
       
       console.log('Memory queue users loaded:', queueUsers.length);
       console.log('Queue users details:', queueUsers.map(u => ({ id: u.id.toString(), username: u.username })));
-      
-      // Фильтруем тех, у кого нет активной пары как партнер (для consistency с Redis)
-      const usersWithoutPartnerPair: MatchingQueueUser[] = [];
-      for (const user of queueUsers) {
-        const hasPartnerPair = await prisma.pair.findFirst({
-          where: {
-            partnerId: user.id,
-            status: 'active',
-          },
-        });
-        
-        console.log(`User ${user.id} (${user.username}) has partner pair: ${!!hasPartnerPair}`);
-        
-        if (!hasPartnerPair) {
-          usersWithoutPartnerPair.push(user);
-        }
-      }
-      
-      console.log('Memory queue users without partner pair:', usersWithoutPartnerPair.length);
-      console.log('Final waiting users:', usersWithoutPartnerPair.map(u => ({ id: u.id.toString(), username: u.username })));
-      return usersWithoutPartnerPair;
+      return queueUsers;
     }
     // Сначала получаем всех пользователей в Redis очереди
     const keys = await redis.keys('matching:user:*');
@@ -300,28 +267,9 @@ async function getWaitingUsers(): Promise<MatchingQueueUser[]> {
     console.log('Users in DB:', users.map(u => ({ id: u.id.toString(), username: u.username, level: u.level })));
 
     // Фильтруем тех, у кого нет активной пары как партнер
-    const usersWithoutPartnerPair: MatchingQueueUser[] = [];
-    
-    for (const user of users) {
-      const hasPartnerPair = await prisma.pair.findFirst({
-        where: {
-          partnerId: user.id,
-          status: 'active',
-        },
-      });
-      
-      console.log(`User ${user.id} has partner pair: ${!!hasPartnerPair}`);
-      
-      if (!hasPartnerPair) {
-        usersWithoutPartnerPair.push({
-          ...user,
-          rating: Number(user.rating),
-        });
-      }
-    }
-
-    console.log('Users without partner pair:', usersWithoutPartnerPair.length);
-    return usersWithoutPartnerPair;
+    const allQueueUsers: MatchingQueueUser[] = users.map(u => ({ ...u, rating: Number(u.rating) }));
+    console.log('All queue users:', allQueueUsers.length);
+    return allQueueUsers;
   } catch (error) {
     console.error('Error in getWaitingUsers:', error);
     return [];
@@ -404,18 +352,14 @@ export async function runMatching(): Promise<{ pairsCreated: number }> {
 
   // FIFO: проходим по очереди, для каждого подбираем валидного смотрящего
   for (const partner of waitingUsers) {
+    // Пропускаем тех, у кого уже есть смотрящий — они в очереди как потенциальные смотрящие
+    const partnerHasPair = await prisma.pair.findFirst({
+      where: { partnerId: partner.id, status: 'active' },
+    });
+    if (partnerHasPair) continue;
+
     const watcher = await findWatcherCandidateForUser(partner);
     if (!watcher) continue;
-
-    // Проверяем, что партнер еще не в паре
-    const partnerHasPair = await prisma.pair.findFirst({
-      where: {
-        partnerId: partner.id,
-        status: 'active',
-      },
-    });
-
-    if (partnerHasPair) continue;
 
     // Создаем пару: partner - партнер, watcher - смотрящий
     await createPair(partner, watcher);
@@ -456,6 +400,16 @@ export async function matchUser(userId: bigint): Promise<{ matched: boolean; par
     console.log('User found:', { id: user.id.toString(), username: user.username, level: user.level });
 
     const userData = { ...user, rating: Number(user.rating) };
+
+    // If user already has a watcher, they joined as a potential watcher — skip finding one for them
+    const alreadyPartner = await prisma.pair.findFirst({
+      where: { partnerId: userId, status: 'active' },
+    });
+    if (alreadyPartner) {
+      console.log('User already has a watcher, skipping matchUser for:', userId.toString());
+      return { matched: false };
+    }
+
     const candidate = await findWatcherCandidateForUser(userData);
     if (!candidate) {
       console.log('No compatible user found for:', userId.toString());
