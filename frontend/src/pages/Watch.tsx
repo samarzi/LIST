@@ -4,7 +4,7 @@ import {
   Eye, Clock, TrendingUp, AlertCircle, X, ChevronRight, Flame,
   CheckCircle2, XCircle, FileText, Vote, RefreshCw, ExternalLink, User, MessageSquare, Info, Send,
 } from 'lucide-react';
-import { pairsApi, goalsApi, votingApi, pairMessagesApi, reportsApi, type WatcherStudent, type PairStatus, type PairMessage } from '../api/client';
+import { pairsApi, goalsApi, votingApi, pairMessagesApi, reportsApi, goalCommentsApi, type WatcherStudent, type PairStatus, type PairMessage, type GoalComment } from '../api/client';
 import { useUIStore } from '../store';
 
 const DIFFICULTY_HINTS: Record<number, { label: string; color: string; desc: string }> = {
@@ -630,8 +630,10 @@ function StudentCard({
 }) {
   const { partner } = ws;
   const name = partner.displayName ?? partner.username ?? 'Партнёр';
+  const [commentGoal, setCommentGoal] = useState<GoalWithProof | null>(null);
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -660,13 +662,8 @@ function StudentCard({
             const needsProof = goal.status === 'on_check';
 
             return (
-              <motion.div
+              <div
                 key={goal.id}
-                whileTap={(needsReview || needsProof) ? { scale: 0.98 } : undefined}
-                onClick={() => {
-                  if (needsReview) onReviewClick(goal);
-                  else if (needsProof) onProofClick(goal);
-                }}
                 style={{
                   padding: '10px 12px',
                   background: needsProof
@@ -677,10 +674,15 @@ function StudentCard({
                   border: `1px solid ${needsProof ? 'rgba(48,209,88,0.2)' : needsReview ? 'rgba(255,214,10,0.2)' : 'transparent'}`,
                   borderRadius: 10,
                   display: 'flex', alignItems: 'center', gap: 10,
-                  cursor: (needsReview || needsProof) ? 'pointer' : 'default',
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{ flex: 1, minWidth: 0, cursor: (needsReview || needsProof) ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (needsReview) onReviewClick(goal);
+                    else if (needsProof) onProofClick(goal);
+                  }}
+                >
                   <div className="body-sm truncate" style={{ fontWeight: 500 }}>{goal.title}</div>
                   <div className="flex items-center gap-3 mt-1">
                     <div
@@ -700,24 +702,148 @@ function StudentCard({
                     )}
                   </div>
                 </div>
-                {needsProof ? (
-                  <div className="flex items-center gap-1">
-                    <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>Проверить</span>
-                    <ChevronRight size={13} color="var(--green)" />
-                  </div>
-                ) : needsReview ? (
-                  <div className="flex items-center gap-1">
-                    <span style={{ fontSize: 11, color: 'var(--yellow)', fontWeight: 600 }}>Оценить</span>
-                    <ChevronRight size={13} color="var(--yellow)" />
-                  </div>
-                ) : (
-                  <GoalStatusDot status={goal.status} />
-                )}
-              </motion.div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCommentGoal(goal)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-3)', display: 'flex' }}
+                  >
+                    <MessageSquare size={14} />
+                  </button>
+                  {needsProof ? (
+                    <div className="flex items-center gap-1" onClick={() => onProofClick(goal)} style={{ cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>Проверить</span>
+                      <ChevronRight size={13} color="var(--green)" />
+                    </div>
+                  ) : needsReview ? (
+                    <div className="flex items-center gap-1" onClick={() => onReviewClick(goal)} style={{ cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: 'var(--yellow)', fontWeight: 600 }}>Оценить</span>
+                      <ChevronRight size={13} color="var(--yellow)" />
+                    </div>
+                  ) : (
+                    <GoalStatusDot status={goal.status} />
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
       )}
+    </motion.div>
+
+    <AnimatePresence>
+      {commentGoal && (
+        <GoalCommentsModal goal={commentGoal} onClose={() => setCommentGoal(null)} />
+      )}
+    </AnimatePresence>
+    </>
+  );
+}
+
+function GoalCommentsModal({ goal, onClose }: { goal: GoalWithProof; onClose: () => void }) {
+  const [comments, setComments] = useState<GoalComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    goalCommentsApi.list(goal.id).then(r => setComments(r.data)).finally(() => setLoading(false));
+  }, [goal.id]);
+
+  async function send() {
+    if (!text.trim()) return;
+    setSending(true);
+    try {
+      const { data } = await goalCommentsApi.create(goal.id, text.trim());
+      setComments(prev => [...prev, data]);
+      setText('');
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch (err) {
+      console.error('Failed to send comment:', err);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <motion.div
+      className="modal-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        className="modal-sheet"
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+        style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+      >
+        <div className="modal-handle" />
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="title-md">Комментарии</h2>
+            <p className="body-sm text-faint mt-1 truncate" style={{ maxWidth: 240 }}>{goal.title}</p>
+          </div>
+          <button className="btn-icon btn-ghost" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+          {loading ? (
+            <div className="skeleton" style={{ height: 60, borderRadius: 10 }} />
+          ) : comments.length === 0 ? (
+            <div className="body-sm text-faint text-center" style={{ paddingTop: 16 }}>Нет комментариев</div>
+          ) : (
+            comments.map(c => (
+              <div
+                key={c.id}
+                style={{
+                  padding: '10px 12px',
+                  background: c.isFromMe ? 'var(--surface-2)' : 'rgba(167,139,250,0.06)',
+                  border: c.isFromMe ? '1px solid transparent' : '1px solid rgba(167,139,250,0.15)',
+                  borderRadius: 10,
+                  alignSelf: c.isFromMe ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                }}
+              >
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
+                  {c.isFromMe ? 'Вы' : (c.user.displayName || c.user.username || 'Партнёр')}
+                </div>
+                <div style={{ fontSize: 14, lineHeight: 1.4, color: 'var(--text-1)' }}>{c.content}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3 }}>
+                  {new Date(c.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <input
+            type="text"
+            className="input"
+            placeholder="Написать комментарий..."
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyPress={e => e.key === 'Enter' && send()}
+            style={{ flex: 1, fontSize: 14 }}
+          />
+          <button
+            onClick={send}
+            disabled={!text.trim() || sending}
+            style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: text.trim() ? 'var(--accent)' : 'var(--surface-2)',
+              border: 'none', cursor: text.trim() ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: sending ? 0.6 : 1, flexShrink: 0,
+            }}
+          >
+            <Send size={18} color={text.trim() ? '#fff' : 'var(--text-3)'} />
+          </button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

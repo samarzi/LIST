@@ -51,6 +51,18 @@ export default function GoalsPage() {
     }
   }, [user?.id]); // Reload when user changes
 
+  async function deleteGoal(goalId: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm('Удалить цель?')) return;
+    try {
+      await goalsApi.delete(goalId);
+      setGoals(goals.filter(g => g.id !== goalId));
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    } catch (err: any) {
+      alert(err.response?.data?.error ?? 'Ошибка удаления');
+    }
+  }
+
   async function loadGoals() {
     const currentUser = useAuthStore.getState().user;
     if (!currentUser) return;
@@ -203,7 +215,17 @@ export default function GoalsPage() {
                           <div className="body-sm" style={{ fontWeight: 600, marginBottom: 4 }}>{goal.title}</div>
                           <div className="caption text-faint">{STATUS_LABELS[goal.status] || goal.status}</div>
                         </div>
-                        <ChevronRight size={18} color="var(--text-3)" />
+                        <div className="flex items-center gap-2">
+                          {goal.status !== 'completed' && (
+                            <button
+                              onClick={(e) => deleteGoal(goal.id, e)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-3)' }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                          <ChevronRight size={18} color="var(--text-3)" />
+                        </div>
                       </div>
                     </motion.div>
                   ))}

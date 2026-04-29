@@ -28,6 +28,7 @@ model User {
   lastSeenAt          DateTime?        @map("last_seen_at")
   checkins            Checkin[]
   goals               Goal[]
+  goalComments        GoalComment[]
   groupMemberships    GroupMember[]
   createdGroups       Group[]
   habits              Habit[]
@@ -78,6 +79,7 @@ model Goal {
   createdAt       DateTime       @default(now()) @map("created_at")
   completedAt     DateTime?      @map("completed_at")
   checkins        Checkin[]
+  comments        GoalComment[]
   pair            Pair?          @relation(fields: [pairId], references: [id])
   user            User           @relation(fields: [userId], references: [id])
   proofs          Proof[]
@@ -86,6 +88,19 @@ model Goal {
   votingSession   VotingSession?
 
   @@map("goals")
+}
+
+model GoalComment {
+  id        BigInt   @id @default(autoincrement())
+  goalId    BigInt   @map("goal_id")
+  userId    BigInt   @map("user_id")
+  content   String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("goal_comments")
 }
 
 model Checkin {

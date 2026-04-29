@@ -291,4 +291,68 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   return res.json({ success: true });
 });
 
+// Goal comments (watcher or owner can read; watcher can write)
+router.get('/:id/comments', requireAuth, async (req: Request, res: Response) => {
+  const goalId = BigInt(req.params.id);
+  const userId = BigInt(req.user!.userId);
+
+  const goal = await prisma.goal.findUnique({ where: { id: goalId }, select: { userId: true, pairId: true } });
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+  // Allow owner or watcher of the pair
+  const isOwner = goal.userId === userId;
+  const isWatcher = goal.pairId
+    ? !!(await prisma.pair.findFirst({ where: { id: goal.pairId, watcherId: userId } }))
+    : false;
+  if (!isOwner && !isWatcher) return res.status(403).json({ error: 'Forbidden' });
+
+  const comments = await prisma.goalComment.findMany({
+    where: { goalId },
+    include: { user: { select: { id: true, username: true, displayName: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return res.json(comments.map(c => ({
+    id: Number(c.id),
+    content: c.content,
+    createdAt: c.createdAt,
+    isFromMe: c.userId === userId,
+    user: { id: Number(c.user.id), username: c.user.username, displayName: c.user.displayName },
+  })));
+});
+
+router.post('/:id/comments', requireAuth, async (req: Request, res: Response) => {
+  const goalId = BigInt(req.params.id);
+  const userId = BigInt(req.user!.userId);
+  const { content } = req.body;
+
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return res.status(400).json({ error: 'Content required' });
+  }
+  if (content.length > 500) return res.status(400).json({ error: 'Too long' });
+
+  const goal = await prisma.goal.findUnique({ where: { id: goalId }, select: { userId: true, pairId: true } });
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+  // Only watcher or owner can comment
+  const isOwner = goal.userId === userId;
+  const isWatcher = goal.pairId
+    ? !!(await prisma.pair.findFirst({ where: { id: goal.pairId, watcherId: userId } }))
+    : false;
+  if (!isOwner && !isWatcher) return res.status(403).json({ error: 'Forbidden' });
+
+  const comment = await prisma.goalComment.create({
+    data: { goalId, userId, content: content.trim() },
+    include: { user: { select: { id: true, username: true, displayName: true } } },
+  });
+
+  return res.status(201).json({
+    id: Number(comment.id),
+    content: comment.content,
+    createdAt: comment.createdAt,
+    isFromMe: true,
+    user: { id: Number(comment.user.id), username: comment.user.username, displayName: comment.user.displayName },
+  });
+});
+
 export default router;

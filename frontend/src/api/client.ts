@@ -97,6 +97,21 @@ export const habitsApi = {
   toggle: (id: number) => api.post<{ completed: boolean }>(`/habits/${id}/toggle`),
 };
 
+// Goal Comments
+export interface GoalComment {
+  id: number;
+  content: string;
+  createdAt: string;
+  isFromMe: boolean;
+  user: { id: number; username: string | null; displayName: string | null };
+}
+
+export const goalCommentsApi = {
+  list: (goalId: number) => api.get<GoalComment[]>(`/goals/${goalId}/comments`),
+  create: (goalId: number, content: string) =>
+    api.post<GoalComment>(`/goals/${goalId}/comments`, { content }),
+};
+
 // Reports
 export const reportsApi = {
   create: (goalId: number, reason: string) =>
